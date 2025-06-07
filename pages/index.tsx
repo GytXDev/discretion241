@@ -65,7 +65,7 @@ export default function Home() {
         const q = query(
           collection(db, "users"),
           where("isVerified", "==", true),
-          where("type", "==", "proposeur")
+          where("type", "==", "proposer")
         );
         const snap = await getDocs(q);
         setProfiles(snap.docs.map((d) => d.data() as Profile));
@@ -182,7 +182,7 @@ export default function Home() {
     return (
       <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition">
         {/* Carousel */}
-        <div className="relative w-full h-64 overflow-hidden bg-gray-200">
+        <div className="relative w-full h-80 sm:h-[380px] overflow-hidden bg-black">
           {profile.photos.length > 0 ? (
             <>
               <Image
@@ -190,7 +190,7 @@ export default function Home() {
                 alt={`${profile.pseudo} ${currentPhotoIndex + 1}`}
                 fill
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                className="object-cover"
+                className="object-cover transition duration-500 ease-in-out"
               />
               {profile.photos.length > 1 && (
                 <>
