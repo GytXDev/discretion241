@@ -25,6 +25,7 @@ export default function CompleteProfilePage() {
     const [uploading, setUploading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [currentStep, setCurrentStep] = useState(1);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     const villes = ['Libreville', 'Franceville', 'Moanda', 'Port Gentil', 'Oyem'];
     const genres = ['femme', 'homme', 'autre'];
@@ -32,13 +33,28 @@ export default function CompleteProfilePage() {
 
     useEffect(() => {
         if (!user) router.push('/login');
+        
     }, [user]);
+
+    useEffect(() => {
+        // Copie des URLs actuelles pour le nettoyage
+        const currentPreviews = [...previewPhotos];
+
+        return () => {
+            currentPreviews.forEach(url => {
+                try {
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    console.warn("Erreur lors de la libération de l'URL", e);
+                }
+            });
+        };
+    }, [previewPhotos]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
 
-            // 🔁 Ajouter à la liste existante
             const newPhotos = [...photos, ...files].slice(0, 6); // max 6
             const newPreviews = [
                 ...previewPhotos,
@@ -52,13 +68,41 @@ export default function CompleteProfilePage() {
 
     const handleImageUpload = async (): Promise<string[]> => {
         const urls: string[] = [];
-        for (const img of photos) {
-            const formData = new FormData();
-            formData.append("image", img);
-            const res = await fetch("/api/upload", { method: "POST", body: formData });
-            const data = await res.json();
-            urls.push(data.url);
+
+        for (let i = 0; i < photos.length; i++) {
+            const img = photos[i];
+            let retries = 0;
+            let uploaded = false;
+
+            while (retries < 3 && !uploaded) {
+                try {
+                    const formData = new FormData();
+                    formData.append('image', img);
+
+                    const response = await fetch('https://gytx.dev/discretion241/api/upload_image.php', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.url) {
+                        throw new Error(data.message || "Upload failed");
+                    }
+
+                    urls.push(data.url);
+                    uploaded = true;
+
+                } catch (error) {
+                    retries++;
+                    if (retries === 3) {
+                        throw new Error(`Échec après 3 tentatives: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+                }
+            }
         }
+
         return urls;
     };
 
@@ -85,15 +129,18 @@ export default function CompleteProfilePage() {
         }
 
         if ((type === 'proposer' && photos.length < 2) || (type === 'demander' && photos.length < 1)) {
-            return setErrorMessage("Nombre de photos insuffisant.");
+            return setErrorMessage(`Nombre de photos insuffisant (${type === 'proposer' ? '2 minimum' : '1 minimum'}).`);
         }
 
         setUploading(true);
         try {
+            // 1. Upload des images
             const uploadedURLs = await handleImageUpload();
 
-            const data: any = {
+            // 2. Enregistrement dans Firestore
+            const userData = {
                 uid: user?.uid,
+                email: user?.email,
                 pseudo,
                 genre,
                 age: parseInt(age),
@@ -101,9 +148,9 @@ export default function CompleteProfilePage() {
                 preferences: preferences.includes('tous') ? ['femmes', 'hommes'] : preferences,
                 description: type === 'proposer' ? description : '',
                 tarifs: type === 'proposer' ? {
-                    un_coup: parseInt(tarifs.un || "0"),
-                    deux_coups: parseInt(tarifs.deux || "0"),
-                    nuit: parseInt(tarifs.nuit || "0"),
+                    un_coup: parseInt(tarifs.un) || 0,
+                    deux_coups: parseInt(tarifs.deux) || 0,
+                    nuit: parseInt(tarifs.nuit) || 0,
                 } : null,
                 deplace,
                 recoit,
@@ -113,13 +160,18 @@ export default function CompleteProfilePage() {
                 isVerified: false,
                 step: 'verification',
                 createdAt: serverTimestamp(),
+                lastUpdated: serverTimestamp(),
             };
 
-            await setDoc(doc(db, 'users', user!.uid), data);
+            await setDoc(doc(db, 'users', user!.uid), userData);
             router.push('/verify');
         } catch (err) {
-            console.error(err);
-            setErrorMessage("Erreur lors de l'enregistrement du profil.");
+            console.error("Erreur enregistrement:", err);
+            setErrorMessage(
+                err instanceof Error
+                    ? err.message
+                    : "Une erreur est survenue lors de l'enregistrement"
+            );
         } finally {
             setUploading(false);
         }
@@ -417,6 +469,20 @@ export default function CompleteProfilePage() {
                             >
                                 {uploading ? "Enregistrement..." : "Terminer"}
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {uploading && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center">
+                            <h3 className="font-medium mb-2">Envoi en cours...</h3>
+                            <progress
+                                value={uploadProgress}
+                                max="100"
+                                className="w-full h-2 rounded"
+                            />
+                            <p className="mt-2 text-sm">{uploadProgress}%</p>
                         </div>
                     </div>
                 )}

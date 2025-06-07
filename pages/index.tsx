@@ -47,8 +47,14 @@ export default function Home() {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
+
           if (userData.step === "profile") {
             router.push("/complete_profile");
+            return;
+          }
+
+          if (userData.step === "verification") {
+            router.push("/verify");
             return;
           }
         }
@@ -71,6 +77,7 @@ export default function Home() {
       }
     })();
   }, [user, router]);
+
 
   /* ==================== SHIMMER ==================== */
   const renderShimmer = () => (
