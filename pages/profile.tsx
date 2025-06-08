@@ -43,7 +43,6 @@ export default function ProfilePage() {
     const [selectedArea, setSelectedArea] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
     const [isSelecting, setIsSelecting] = useState(false);
     const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
-    const [pixelSize, setPixelSize] = useState(15);
     const [resizeMode, setResizeMode] = useState<'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null>(null);
     const [resizeStart, setResizeStart] = useState({ x: 0, y: 0 });
 
@@ -54,17 +53,38 @@ export default function ProfilePage() {
     const [showContactForm, setShowContactForm] = useState(false);
     const [contact, setContact] = useState('');
 
-    const [elements, setElements] = useState<Array<{
-        type: 'pixelate' | 'emoji';
+    const [pixelateMode, setPixelateMode] = useState(false);
+    const [pixelSize, setPixelSize] = useState(15);
+    const [pixelElements, setPixelElements] = useState<Array<{
         x: number;
         y: number;
         width: number;
         height: number;
-        emoji?: string;
-        pixelSize?: number;
+        pixelSize: number;
     }>>([]);
 
-    const [activeElementIndex, setActiveElementIndex] = useState<number | null>(null);
+
+    type CanvasElement =
+        | {
+            type: 'pixelate';
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+            pixelSize: number;
+        }
+        | {
+            type: 'emoji';
+            x: number;
+            y: number;
+            width: number;
+            height: number;
+            emoji: string;
+        };
+
+    const [elements, setElements] = useState<CanvasElement[]>([]);
+    const [activeTool, setActiveTool] = useState<'pixelate' | 'emoji' | null>(null);
+
 
     const emojis = ['😊', '❤️', '🌸', '🌟', '🔞', '💋', '🍑', '💦', '👄', '👅'];
 
@@ -153,6 +173,137 @@ export default function ProfilePage() {
         setResizeStart({ x: e.clientX, y: e.clientY });
     };
 
+    const addPixelation = () => {
+        if (!canvasRef.current || !editingPhoto) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const size = Math.min(canvas.width, canvas.height) * 0.3;
+
+        const newElement = {
+            x: centerX - size / 2,
+            y: centerY - size / 2,
+            width: size,
+            height: size,
+            pixelSize: pixelSize
+        };
+
+        // Appliquer immédiatement la pixelisation
+        applyPixelation(newElement);
+
+        setPixelElements(prev => [...prev, newElement]);
+    };
+
+    const applyPixelation = (element: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        pixelSize: number;
+    }) => {
+        if (!canvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx || !editingPhoto) return;
+
+        // Créer un mini-canvas pour le pixelate
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d')!;
+        tempCanvas.width = element.pixelSize;
+        tempCanvas.height = element.pixelSize;
+
+        // Dessiner la zone à pixeliser sur le mini-canvas
+        tempCtx.drawImage(
+            canvas,
+            element.x, element.y, element.width, element.height,
+            0, 0, tempCanvas.width, tempCanvas.height
+        );
+
+        // Redessiner le mini-canvas agrandi sur la zone originale
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+            tempCanvas,
+            0, 0, tempCanvas.width, tempCanvas.height,
+            element.x, element.y, element.width, element.height
+        );
+    };
+
+
+    const updatePixelElement = (index: number, prop: string, value: number) => {
+        setPixelElements(prev => {
+            const updated = [...prev];
+            updated[index] = { ...updated[index], [prop]: value };
+
+            // Réappliquer la pixelisation
+            if (canvasRef.current && editingPhoto) {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    // Redessiner l'image originale
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0);
+                        // Réappliquer toutes les pixelisations
+                        updated.forEach(applyPixelation);
+                    };
+                    img.src = editingPhoto.src;
+                }
+            }
+
+            return updated;
+        });
+    };
+
+    const removePixelElement = (index: number) => {
+        setPixelElements(prev => {
+            const updated = prev.filter((_, i) => i !== index);
+
+            // Redessiner l'image avec les éléments restants
+            if (canvasRef.current && editingPhoto) {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0);
+                        updated.forEach(applyPixelation);
+                    };
+                    img.src = editingPhoto.src;
+                }
+            }
+
+            return updated;
+        });
+    };
+
+    const addEmoji = (emoji: string) => {
+        if (!canvasRef.current) return;
+
+        const canvas = canvasRef.current;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const size = Math.min(canvas.width, canvas.height) * 0.2;
+
+        setElements(prev => [
+            ...prev,
+            {
+                type: 'emoji',
+                x: centerX - size / 2,
+                y: centerY - size / 2,
+                width: size,
+                height: size,
+                emoji: emoji
+            }
+        ]);
+
+        setActiveTool(null);
+    };
+
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
@@ -184,42 +335,33 @@ export default function ProfilePage() {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // Redessiner l'image originale
         const img = new Image();
         img.onload = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0);
 
-            // Appliquer tous les éléments
-            elements.forEach(element => {
-                if (element.type === 'pixelate') {
-                    // Créer un mini-canvas pour le pixelate
-                    const tempCanvas = document.createElement('canvas');
-                    const tempCtx = tempCanvas.getContext('2d')!;
-                    tempCanvas.width = element.pixelSize || pixelSize;
-                    tempCanvas.height = (element.pixelSize || pixelSize) * (element.height / element.width);
+            // Appliquer les pixelations
+            pixelElements.forEach(element => {
+                // Créer un mini-canvas pour le pixelate
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d')!;
+                tempCanvas.width = element.pixelSize;
+                tempCanvas.height = element.pixelSize;
 
-                    // Dessiner la zone à pixeliser sur le mini-canvas
-                    tempCtx.drawImage(
-                        canvas,
-                        element.x, element.y, element.width, element.height,
-                        0, 0, tempCanvas.width, tempCanvas.height
-                    );
+                // Dessiner la zone à pixeliser sur le mini-canvas
+                tempCtx.drawImage(
+                    canvas,
+                    element.x, element.y, element.width, element.height,
+                    0, 0, tempCanvas.width, tempCanvas.height
+                );
 
-                    // Redessiner le mini-canvas agrandi sur la zone originale
-                    ctx.imageSmoothingEnabled = false;
-                    ctx.drawImage(
-                        tempCanvas,
-                        0, 0, tempCanvas.width, tempCanvas.height,
-                        element.x, element.y, element.width, element.height
-                    );
-                } else if (element.type === 'emoji' && element.emoji) {
-                    const emojiSize = Math.min(element.width, element.height) * 0.8;
-                    ctx.font = `bold ${emojiSize}px Arial`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(element.emoji, element.x + element.width / 2, element.y + element.height / 2);
-                }
+                // Redessiner le mini-canvas agrandi sur la zone originale
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(
+                    tempCanvas,
+                    0, 0, tempCanvas.width, tempCanvas.height,
+                    element.x, element.y, element.width, element.height
+                );
             });
 
             const dataUrl = canvas.toDataURL('image/jpeg');
@@ -228,154 +370,10 @@ export default function ProfilePage() {
             ));
 
             setEditingPhoto(null);
-            setBlurMode(null);
-            setElements([]);
-            setSelectedArea(null);
+            setPixelateMode(false);
+            setPixelElements([]);
         };
         img.src = editingPhoto.src;
-    };
-    
-    // Gestion des interactions avec le canvas
-    const handleCanvasMouseDown = (e: React.MouseEvent) => {
-        if (!canvasRef.current || !blurMode) return;
-
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-
-        // Vérifier si on clique sur un élément existant
-        const clickedElementIndex = elements.findIndex(el =>
-            x >= el.x && x <= el.x + el.width &&
-            y >= el.y && y <= el.y + el.height
-        );
-
-        if (clickedElementIndex >= 0) {
-            setActiveElementIndex(clickedElementIndex);
-            setResizeMode('move');
-            setResizeStart({ x: e.clientX, y: e.clientY });
-            return;
-        }
-
-        // Créer un nouvel élément
-        if (blurMode === 'emoji') {
-            setElements(prev => [
-                ...prev,
-                {
-                    type: 'emoji',
-                    x: x - 25, // centre l'emoji
-                    y: y - 25,
-                    width: 50,
-                    height: 50,
-                    emoji: selectedEmoji
-                }
-            ]);
-        } else {
-            setSelectedArea({ x, y, width: 0, height: 0 });
-            setIsSelecting(true);
-        }
-    };
-
-    const handleCanvasMouseMove = (e: React.MouseEvent) => {
-        if (!canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-
-        let x = (e.clientX - rect.left) * scaleX;
-        let y = (e.clientY - rect.top) * scaleY;
-
-        // Contrainte aux limites du canvas
-        x = Math.max(0, Math.min(x, canvas.width));
-        y = Math.max(0, Math.min(y, canvas.height));
-
-        // Mode déplacement/redimensionnement d'élément
-        if (resizeMode !== null && activeElementIndex !== null) {
-            const dx = (e.clientX - resizeStart.x) * scaleX;
-            const dy = (e.clientY - resizeStart.y) * scaleY;
-
-            setResizeStart({ x: e.clientX, y: e.clientY });
-
-            setElements(prev => {
-                const newElements = [...prev];
-                const element = newElements[activeElementIndex];
-                const canvas = canvasRef.current!;
-
-                if (resizeMode === 'move') {
-                    // Nouvelle position avec contraintes
-                    const newX = Math.max(0, Math.min(element.x + dx, canvas.width - element.width));
-                    const newY = Math.max(0, Math.min(element.y + dy, canvas.height - element.height));
-
-                    element.x = newX;
-                    element.y = newY;
-                } else {
-                    // Redimensionnement avec contraintes
-                    if (resizeMode.includes('n')) {
-                        const newHeight = element.height - dy;
-                        if (newHeight > 10 && element.y + dy >= 0) {
-                            element.y += dy;
-                            element.height = newHeight;
-                        }
-                    }
-                    if (resizeMode.includes('s')) {
-                        const newHeight = element.height + dy;
-                        if (newHeight > 10 && element.y + element.height + dy <= canvas.height) {
-                            element.height = newHeight;
-                        }
-                    }
-                    if (resizeMode.includes('w')) {
-                        const newWidth = element.width - dx;
-                        if (newWidth > 10 && element.x + dx >= 0) {
-                            element.x += dx;
-                            element.width = newWidth;
-                        }
-                    }
-                    if (resizeMode.includes('e')) {
-                        const newWidth = element.width + dx;
-                        if (newWidth > 10 && element.x + element.width + dx <= canvas.width) {
-                            element.width = newWidth;
-                        }
-                    }
-                }
-
-                return newElements;
-            });
-        }
-        // Mode sélection de zone
-        else if (isSelecting && selectionStart && blurMode === 'pixelate') {
-            setSelectedArea({
-                x: Math.min(x, selectionStart.x),
-                y: Math.min(y, selectionStart.y),
-                width: Math.abs(x - selectionStart.x),
-                height: Math.abs(y - selectionStart.y)
-            });
-        }
-    };
-
-    const handleCanvasMouseUp = () => {
-        if (isSelecting && selectedArea && blurMode === 'pixelate') {
-            setElements(prev => [
-                ...prev,
-                {
-                    type: 'pixelate',
-                    x: selectedArea.x,
-                    y: selectedArea.y,
-                    width: selectedArea.width,
-                    height: selectedArea.height,
-                    pixelSize: pixelSize
-                }
-            ]);
-            setSelectedArea(null);
-        }
-
-        setIsSelecting(false);
-        setResizeMode(null);
-        setActiveElementIndex(null);
     };
 
     const removePendingPhoto = (index: number) => {
@@ -825,14 +823,7 @@ export default function ProfilePage() {
                                 <div className="relative">
                                     <canvas
                                         ref={canvasRef}
-                                        className="max-w-full max-h-[70vh] shadow-lg rounded-lg border border-gray-200 cursor-crosshair"
-                                        onMouseDown={handleCanvasMouseDown}
-                                        onMouseMove={handleCanvasMouseMove}
-                                        onMouseUp={handleCanvasMouseUp}
-                                        onMouseLeave={() => {
-                                            setIsSelecting(false);
-                                            setResizeMode(null);
-                                        }}
+                                        className="max-w-full max-h-[70vh] shadow-lg rounded-lg border border-gray-200"
                                     />
 
                                     {/* Zone de sélection avec poignées de redimensionnement */}
@@ -880,100 +871,103 @@ export default function ProfilePage() {
                             <div className="md:w-72 bg-white border-l border-gray-200 p-4 space-y-6 overflow-y-auto">
                                 <div>
                                     <h4 className="font-medium text-lg mb-3">Outils de modification</h4>
-                                    <div className="space-y-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPixelateMode(true);
+                                            addPixelation();
+                                        }}
+                                        className={`w-full py-3 px-4 rounded-lg flex items-center space-x-3 ${pixelateMode ? 'bg-purple-100 border border-purple-500' : 'border border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        <div className="w-6 h-6 bg-gray-300 rounded-sm"></div>
+                                        <span>Ajouter une pixelisation</span>
+                                    </button>
+
+                                    {/* Sélection d'emojis */}
+                                    <div>
                                         <button
-                                            type="button"
-                                            onClick={() => {
-                                                setBlurMode('pixelate');
-                                                if (canvasRef.current) {
-                                                    const canvas = canvasRef.current;
-                                                    const size = Math.min(canvas.width, canvas.height) * 0.3;
-                                                    setSelectedArea({
-                                                        x: (canvas.width - size) / 2,
-                                                        y: (canvas.height - size) / 2,
-                                                        width: size,
-                                                        height: size
-                                                    });
-                                                }
-                                            }}
-                                            className={`w-full py-3 px-4 rounded-lg flex items-center space-x-3 ${blurMode === 'pixelate' ? 'bg-purple-100 border border-purple-500' : 'border border-gray-300 hover:bg-gray-50'}`}
+                                            onClick={() => setActiveTool(activeTool === 'emoji' ? null : 'emoji')}
+                                            className={`w-full py-3 px-4 rounded-lg mb-2 ${activeTool === 'emoji' ? 'bg-purple-100 border border-purple-500' : 'border border-gray-300'}`}
                                         >
-                                            <div className="w-6 h-6 bg-gray-300 rounded-sm"></div>
-                                            <span>Pixeliser une zone</span>
+                                            Ajouter un emoji
                                         </button>
 
-                                        <button
-                                            type="button"
-                                            onClick={() => setBlurMode('emoji')}
-                                            className={`w-full py-3 px-4 rounded-lg flex items-center space-x-3 ${blurMode === 'emoji' ? 'bg-purple-100 border border-purple-500' : 'border border-gray-300 hover:bg-gray-50'}`}
-                                        >
-                                            <span className="text-xl">😊</span>
-                                            <span>Ajouter un emoji</span>
-                                        </button>
+                                        {activeTool === 'emoji' && (
+                                            <div className="grid grid-cols-5 gap-2 p-2 bg-gray-50 rounded-lg">
+                                                {emojis.map(emoji => (
+                                                    <button
+                                                        key={emoji}
+                                                        onClick={() => addEmoji(emoji)}
+                                                        className="text-2xl p-2 hover:bg-gray-200 rounded-lg"
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
+
+
                                 </div>
 
-                                {blurMode === 'emoji' && (
-                                    <div className="pt-2">
-                                        <h5 className="text-sm font-medium mb-2">Choisissez un emoji</h5>
-                                        <div className="grid grid-cols-6 gap-2">
-                                            {emojis.map(emoji => (
-                                                <button
-                                                    key={emoji}
-                                                    type="button"
-                                                    onClick={() => setSelectedEmoji(emoji)}
-                                                    className={`text-2xl p-2 rounded-lg flex items-center justify-center ${selectedEmoji === emoji ? 'bg-purple-100' : 'hover:bg-gray-100'}`}
-                                                >
-                                                    {emoji}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {blurMode === 'pixelate' && (
+                                {pixelateMode && (
                                     <div className="pt-2">
                                         <h5 className="text-sm font-medium mb-2">Intensité du flou</h5>
                                         <input
                                             type="range"
                                             min="5"
-                                            max="30"
+                                            max="50"
                                             value={pixelSize}
-                                            onChange={(e) => setPixelSize(parseInt(e.target.value))}
+                                            onChange={(e) => {
+                                                const newSize = parseInt(e.target.value);
+                                                setPixelSize(newSize);
+
+                                                // Mettre à jour et re-appliquer toutes les pixelisations
+                                                setPixelElements(prev => {
+                                                    return prev.map(el => {
+                                                        const updatedEl = { ...el, pixelSize: newSize };
+                                                        applyPixelation(updatedEl);
+                                                        return updatedEl;
+                                                    });
+                                                });
+                                            }}
                                             className="w-full"
                                         />
                                         <div className="text-xs text-gray-500 text-right">{pixelSize}px</div>
-                                    </div>
-                                )}
 
-                                {selectedArea && (
-                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="text-sm font-medium">Zone sélectionnée</span>
-                                            <button
-                                                onClick={() => setSelectedArea(null)}
-                                                className="text-xs text-gray-500 hover:text-gray-700"
-                                            >
-                                                Effacer
-                                            </button>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                            <div>
-                                                <div className="text-gray-500">Largeur</div>
-                                                <div>{Math.round(selectedArea.width)}px</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-gray-500">Hauteur</div>
-                                                <div>{Math.round(selectedArea.height)}px</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-gray-500">Position X</div>
-                                                <div>{Math.round(selectedArea.x)}px</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-gray-500">Position Y</div>
-                                                <div>{Math.round(selectedArea.y)}px</div>
-                                            </div>
+                                        <div className="mt-4 space-y-2">
+                                            {pixelElements.map((el, index) => (
+                                                <div key={index} className="p-2 bg-gray-50 rounded-lg">
+                                                    <div className="text-sm font-medium mb-1">Zone {index + 1}</div>
+                                                    <div className="grid grid-cols-2 gap-2 text-xs">
+                                                        <div>
+                                                            <div className="text-gray-500">Position X</div>
+                                                            <input
+                                                                type="number"
+                                                                value={Math.round(el.x)}
+                                                                onChange={(e) => updatePixelElement(index, 'x', parseInt(e.target.value))}
+                                                                className="w-full p-1 border border-gray-300 rounded"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-gray-500">Position Y</div>
+                                                            <input
+                                                                type="number"
+                                                                value={Math.round(el.y)}
+                                                                onChange={(e) => updatePixelElement(index, 'y', parseInt(e.target.value))}
+                                                                className="w-full p-1 border border-gray-300 rounded"
+                                                            />
+                                                        </div>
+                                                        {/* Ajoutez des contrôles similaires pour width/height */}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => removePixelElement(index)}
+                                                        className="mt-2 text-xs text-red-500 hover:text-red-700"
+                                                    >
+                                                        Supprimer cette zone
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
