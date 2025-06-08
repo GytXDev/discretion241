@@ -307,12 +307,20 @@ export default function Home() {
 
           <div className="flex items-center gap-2">
             {user ? (
-              <button
-                onClick={() => auth.signOut()}
-                className="px-4 py-1.5 text-sm rounded-full bg-gray-100 hover:bg-gray-200 transition"
-              >
-                Déconnexion
-              </button>
+              <>
+                <button
+                  onClick={() => router.push("/profile")}
+                  className="px-4 py-1.5 text-sm rounded-full bg-purple-100 text-purple-800 hover:bg-purple-200 transition"
+                >
+                  Mon compte
+                </button>
+                <button
+                  onClick={() => auth.signOut()}
+                  className="px-4 py-1.5 text-sm rounded-full bg-gray-100 hover:bg-gray-200 transition"
+                >
+                  Déconnexion
+                </button>
+              </>
             ) : (
               <>
                 <button
@@ -329,6 +337,7 @@ export default function Home() {
                 </button>
               </>
             )}
+
           </div>
         </div>
       </div>

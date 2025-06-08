@@ -1,10 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactStrictMode: true,
   images: {
     domains: ['gytx.dev'],
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/api/proxy/:path*',
+        destination: 'https://gytx.dev/discretion241/uploads/profiles/:path*',
+      },
+    ];
   },
 };
 
