@@ -1,92 +1,68 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { auth, db } from '../firebase/config';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { FaTrash, FaPlus, FaEdit, FaCheck, FaTimes } from 'react-icons/fa';
+import useImageEditor from '@/hooks/useImageEditor';
+import { FaSmile, FaTimes, FaTrash, FaPlus, FaEdit, FaTint } from 'react-icons/fa';
+
+interface Profile {
+    pseudo: string;
+    type: string;
+    genre: string;
+    age: string;
+    preferences: string[];
+    description: string;
+    tarifs: { un: string; deux: string; nuit: string };
+    ville: string;
+    quartier: string;
+    deplace: boolean;
+    recoit: boolean;
+    photos: string[];
+    contact: string;
+}
 
 export default function ProfilePage() {
-    // États utilisateur et authentification
     const [user] = useAuthState(auth);
     const router = useRouter();
 
-    // États du profil
-    const [profileData, setProfileData] = useState({
+    const [profileData, setProfileData] = useState<Profile>({
         pseudo: '',
         type: '',
         genre: '',
         age: '',
-        preferences: [] as string[],
+        preferences: [],
         description: '',
         tarifs: { un: '', deux: '', nuit: '' },
         ville: '',
         quartier: '',
         deplace: false,
         recoit: false,
-        photos: [] as string[],
+        photos: [],
         contact: ''
     });
 
-    // États pour l'édition d'images
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [pendingPhotos, setPendingPhotos] = useState<{
-        file: File,
-        preview: string,
-        editedData?: string
-    }[]>([]);
-    const [editingPhoto, setEditingPhoto] = useState<{
-        index: number,
-        src: string
-    } | null>(null);
-    const [blurMode, setBlurMode] = useState<'pixelate' | 'emoji' | null>(null);
-    const [selectedEmoji, setSelectedEmoji] = useState('😊');
-    const [selectedArea, setSelectedArea] = useState<{ x: number, y: number, width: number, height: number } | null>(null);
-    const [isSelecting, setIsSelecting] = useState(false);
-    const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
-    const [resizeMode, setResizeMode] = useState<'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w' | null>(null);
-    const [resizeStart, setResizeStart] = useState({ x: 0, y: 0 });
-
-    // États UI
+    const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string; editedData?: string }[]>([]);
     const [uploading, setUploading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
     const [showContactForm, setShowContactForm] = useState(false);
     const [contact, setContact] = useState('');
 
-    const [pixelateMode, setPixelateMode] = useState(false);
-    const [pixelSize, setPixelSize] = useState(15);
-    const [pixelElements, setPixelElements] = useState<Array<{
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        pixelSize: number;
-    }>>([]);
-
-
-    type CanvasElement =
-        | {
-            type: 'pixelate';
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-            pixelSize: number;
-        }
-        | {
-            type: 'emoji';
-            x: number;
-            y: number;
-            width: number;
-            height: number;
-            emoji: string;
-        };
-
-    const [elements, setElements] = useState<CanvasElement[]>([]);
-    const [activeTool, setActiveTool] = useState<'pixelate' | 'emoji' | null>(null);
-
-
-    const emojis = ['😊', '❤️', '🌸', '🌟', '🔞', '💋', '🍑', '💦', '👄', '👅'];
+    const {
+        canvasRef,
+        editingPhoto,
+        setEditingPhoto,
+        elements,
+        activeTool,
+        setActiveTool,
+        pixelSize,
+        setPixelSize,
+        addElement,
+        removeElement,
+        saveEdits,
+        emojis
+    } = useImageEditor();
 
     useEffect(() => {
         if (!user) {
@@ -94,347 +70,83 @@ export default function ProfilePage() {
             return;
         }
 
-        const fetchProfile = async () => {
-            const docRef = doc(db, 'users', user.uid);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const data = docSnap.data();
+        const fetchData = async () => {
+            const snap = await getDoc(doc(db, 'users', user.uid));
+            if (snap.exists()) {
+                const data = snap.data() as Profile;
                 setProfileData({
-                    pseudo: data.pseudo || '',
-                    type: data.type || '',
-                    genre: data.genre || '',
-                    age: data.age?.toString() || '',
-                    preferences: data.preferences || [], description: data.description || '',
-                    tarifs: {
-                        un: data.tarifs?.un_coup?.toString() || '',
-                        deux: data.tarifs?.deux_coups?.toString() || '',
-                        nuit: data.tarifs?.nuit?.toString() || ''
-                    },
-                    ville: data.ville || '',
-                    quartier: data.quartier || '',
-                    deplace: data.deplace || false,
-                    recoit: data.recoit || false,
+                    ...data,
                     photos: data.photos || [],
-                    contact: data.contact || ''
+                    tarifs: data.tarifs || { un: '', deux: '', nuit: '' }
                 });
                 setContact(data.contact || '');
             }
         };
 
-        fetchProfile();
-    }, [user]);
-
-    // Initialisation du canvas pour l'édition
-    useEffect(() => {
-        if (!editingPhoto || !canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const img = new Image();
-        img.onload = () => {
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
-
-            // Dessiner les éléments existants
-            elements.forEach(element => {
-                if (element.type === 'pixelate') {
-                    ctx.imageSmoothingEnabled = false;
-                    ctx.drawImage(
-                        canvas,
-                        element.x, element.y, element.width, element.height,
-                        element.x, element.y, element.pixelSize || pixelSize,
-                        (element.pixelSize || pixelSize) * (element.height / element.width)
-                    );
-                    ctx.drawImage(
-                        canvas,
-                        element.x, element.y, element.pixelSize || pixelSize,
-                        (element.pixelSize || pixelSize) * (element.height / element.width),
-                        element.x, element.y, element.width, element.height
-                    );
-                } else if (element.type === 'emoji' && element.emoji) {
-                    const emojiSize = Math.min(element.width, element.height) * 0.8;
-                    ctx.font = `bold ${emojiSize}px Arial`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(element.emoji, element.x + element.width / 2, element.y + element.height / 2);
-                }
-            });
-        };
-        img.src = editingPhoto.src;
-    }, [editingPhoto, elements, pixelSize]);
-
-    const handleResizeStart = (e: React.MouseEvent, mode: 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w') => {
-        e.stopPropagation();
-        setResizeMode(mode);
-        setResizeStart({ x: e.clientX, y: e.clientY });
-    };
-
-    const addPixelation = () => {
-        if (!canvasRef.current || !editingPhoto) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        const size = Math.min(canvas.width, canvas.height) * 0.3;
-
-        const newElement = {
-            x: centerX - size / 2,
-            y: centerY - size / 2,
-            width: size,
-            height: size,
-            pixelSize: pixelSize
-        };
-
-        // Appliquer immédiatement la pixelisation
-        applyPixelation(newElement);
-
-        setPixelElements(prev => [...prev, newElement]);
-    };
-
-    const applyPixelation = (element: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        pixelSize: number;
-    }) => {
-        if (!canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx || !editingPhoto) return;
-
-        // Créer un mini-canvas pour le pixelate
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d')!;
-        tempCanvas.width = element.pixelSize;
-        tempCanvas.height = element.pixelSize;
-
-        // Dessiner la zone à pixeliser sur le mini-canvas
-        tempCtx.drawImage(
-            canvas,
-            element.x, element.y, element.width, element.height,
-            0, 0, tempCanvas.width, tempCanvas.height
-        );
-
-        // Redessiner le mini-canvas agrandi sur la zone originale
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(
-            tempCanvas,
-            0, 0, tempCanvas.width, tempCanvas.height,
-            element.x, element.y, element.width, element.height
-        );
-    };
-
-
-    const updatePixelElement = (index: number, prop: string, value: number) => {
-        setPixelElements(prev => {
-            const updated = [...prev];
-            updated[index] = { ...updated[index], [prop]: value };
-
-            // Réappliquer la pixelisation
-            if (canvasRef.current && editingPhoto) {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    // Redessiner l'image originale
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0);
-                        // Réappliquer toutes les pixelisations
-                        updated.forEach(applyPixelation);
-                    };
-                    img.src = editingPhoto.src;
-                }
-            }
-
-            return updated;
-        });
-    };
-
-    const removePixelElement = (index: number) => {
-        setPixelElements(prev => {
-            const updated = prev.filter((_, i) => i !== index);
-
-            // Redessiner l'image avec les éléments restants
-            if (canvasRef.current && editingPhoto) {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0);
-                        updated.forEach(applyPixelation);
-                    };
-                    img.src = editingPhoto.src;
-                }
-            }
-
-            return updated;
-        });
-    };
-
-    const addEmoji = (emoji: string) => {
-        if (!canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        const size = Math.min(canvas.width, canvas.height) * 0.2;
-
-        setElements(prev => [
-            ...prev,
-            {
-                type: 'emoji',
-                x: centerX - size / 2,
-                y: centerY - size / 2,
-                width: size,
-                height: size,
-                emoji: emoji
-            }
-        ]);
-
-        setActiveTool(null);
-    };
+        fetchData();
+    }, [user, router]);
 
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
+        const newFiles = Array.from(e.target.files)
+            .filter(file => file.type.startsWith('image/'))
+            .map(file => ({
+                file,
+                preview: URL.createObjectURL(file),
+                editedData: undefined
+            }));
+        setPendingPhotos(prev => [...prev, ...newFiles].slice(0, 6 - profileData.photos.length));
+    };
 
-        const newFiles = Array.from(e.target.files).map(file => ({
-            file,
-            preview: URL.createObjectURL(file),
-            editedData: undefined
-        }));
+    const removePhoto = (index: number) => {
+        const updated = [...profileData.photos];
+        updated.splice(index, 1);
+        setProfileData(prev => ({ ...prev, photos: updated }));
+    };
 
-        setPendingPhotos(prev => [
-            ...prev,
-            ...newFiles
-        ].slice(0, 6 - profileData.photos.length));
+    const removePendingPhoto = (index: number) => {
+        const updated = [...pendingPhotos];
+        updated.splice(index, 1);
+        setPendingPhotos(updated);
     };
 
     const startEditing = (index: number) => {
         const photo = pendingPhotos[index];
-        setEditingPhoto({
-            index,
-            src: photo.editedData || photo.preview
-        });
+        setEditingPhoto({ index, src: photo.editedData || photo.preview });
     };
 
-    const saveEdits = () => {
-        if (!editingPhoto || !canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        const img = new Image();
-        img.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-
-            // Appliquer les pixelations
-            pixelElements.forEach(element => {
-                // Créer un mini-canvas pour le pixelate
-                const tempCanvas = document.createElement('canvas');
-                const tempCtx = tempCanvas.getContext('2d')!;
-                tempCanvas.width = element.pixelSize;
-                tempCanvas.height = element.pixelSize;
-
-                // Dessiner la zone à pixeliser sur le mini-canvas
-                tempCtx.drawImage(
-                    canvas,
-                    element.x, element.y, element.width, element.height,
-                    0, 0, tempCanvas.width, tempCanvas.height
-                );
-
-                // Redessiner le mini-canvas agrandi sur la zone originale
-                ctx.imageSmoothingEnabled = false;
-                ctx.drawImage(
-                    tempCanvas,
-                    0, 0, tempCanvas.width, tempCanvas.height,
-                    element.x, element.y, element.width, element.height
-                );
-            });
-
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            setPendingPhotos(prev => prev.map((photo, i) =>
-                i === editingPhoto.index ? { ...photo, editedData: dataUrl } : photo
-            ));
-
-            setEditingPhoto(null);
-            setPixelateMode(false);
-            setPixelElements([]);
-        };
-        img.src = editingPhoto.src;
+    const confirmEdits = async () => {
+        if (!editingPhoto) return;
+        const dataUrl = await saveEdits();
+        if (!dataUrl) return;
+        setPendingPhotos(prev =>
+            prev.map((photo, i) =>
+                i === editingPhoto.index
+                    ? { ...photo, editedData: dataUrl }
+                    : photo
+            )
+        );
+        setEditingPhoto(null);
     };
 
-    const removePendingPhoto = (index: number) => {
-        URL.revokeObjectURL(pendingPhotos[index].preview);
-        setPendingPhotos(prev => prev.filter((_, i) => i !== index));
-    };
-
-    const removePhoto = async (index: number) => {
-        try {
-            await deleteImageFromServer(profileData.photos[index]);
-
-            const updatedPhotos = [...profileData.photos];
-            updatedPhotos.splice(index, 1);
-
-            await updateDoc(doc(db, 'users', user!.uid), {
-                photos: updatedPhotos,
-                lastUpdated: serverTimestamp()
-            });
-
-            setProfileData(prev => ({ ...prev, photos: updatedPhotos }));
-        } catch (error) {
-            setErrorMessage("Erreur lors de la suppression");
-        }
-    };
 
     const uploadImageToServer = async (file: File): Promise<string> => {
         const formData = new FormData();
         formData.append('image', file);
-
         const response = await fetch('https://gytx.dev/discretion241/api/upload_image.php', {
             method: 'POST',
-            body: formData,
+            body: formData
         });
-
         const data = await response.json();
         if (!response.ok || !data.url) throw new Error(data.message || "Échec de l'upload");
         return data.url;
-    };
-
-    const deleteImageFromServer = async (imageUrl: string) => {
-        const filename = imageUrl.split('/').pop();
-        if (!filename) throw new Error("Nom de fichier invalide");
-
-        const response = await fetch('https://gytx.dev/discretion241/api/delete_image.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename }),
-        });
-
-        const data = await response.json();
-        if (!response.ok || data.status !== 'success') {
-            throw new Error(data.message || 'Échec de la suppression');
-        }
     };
 
     const handleProfileUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
             setUploading(true);
-
-            // Upload des nouvelles photos
             const uploadedUrls = await Promise.all(
                 pendingPhotos.map(async photo => {
                     const blob = await fetch(photo.editedData || photo.preview).then(res => res.blob());
@@ -442,22 +154,16 @@ export default function ProfilePage() {
                     return uploadImageToServer(file);
                 })
             );
-
-            // Mise à jour complète du profil
             await updateDoc(doc(db, 'users', user!.uid), {
                 ...profileData,
                 photos: [...profileData.photos, ...uploadedUrls],
                 lastUpdated: serverTimestamp()
             });
-
             setPendingPhotos([]);
-            setProfileData(prev => ({
-                ...prev,
-                photos: [...prev.photos, ...uploadedUrls]
-            }));
-            setSuccessMessage("Profil mis à jour avec succès");
+            setProfileData(prev => ({ ...prev, photos: [...prev.photos, ...uploadedUrls] }));
+            setSuccessMessage('Profil mis à jour avec succès');
         } catch (error) {
-            setErrorMessage("Erreur lors de la mise à jour");
+            setErrorMessage((error as Error).message || 'Erreur lors de la mise à jour');
         } finally {
             setUploading(false);
         }
@@ -472,9 +178,9 @@ export default function ProfilePage() {
             });
             setProfileData(prev => ({ ...prev, contact }));
             setShowContactForm(false);
-            setSuccessMessage("Contact mis à jour");
+            setSuccessMessage('Contact mis à jour');
         } catch (error) {
-            setErrorMessage("Erreur lors de la mise à jour du contact");
+            setErrorMessage((error as Error).message || 'Erreur lors de la mise à jour du contact');
         }
     };
 
@@ -787,30 +493,20 @@ export default function ProfilePage() {
                 </form>
             </div>
 
-            {/* Modal d'édition d'image */}
+            {/* Modal d'édition d'image simplifié */}
             {editingPhoto && (
-                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4">
                     <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                        {/* En-tête */}
-                        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-                            <h3 className="text-xl font-bold">
-                                {blurMode === 'pixelate' ? "Flouter une zone" : "Éditer la photo"}
-                            </h3>
+                        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+                            <h3 className="text-lg font-semibold">Éditer la photo</h3>
                             <div className="flex space-x-2">
                                 <button
-                                    onClick={saveEdits}
-                                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
-                                >
-                                    <FaCheck /> <span>Valider</span>
-                                </button>
+                                    onClick={confirmEdits}
+                                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                                >Valider</button>
                                 <button
-                                    onClick={() => {
-                                        setEditingPhoto(null);
-                                        setBlurMode(null);
-                                        setSelectedArea(null);
-                                    }}
-                                    className="p-2 hover:bg-gray-200 rounded-full text-gray-700"
-                                    aria-label="Fermer"
+                                    onClick={() => setEditingPhoto(null)}
+                                    className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700"
                                 >
                                     <FaTimes />
                                 </button>
@@ -818,155 +514,52 @@ export default function ProfilePage() {
                         </div>
 
                         <div className="flex flex-col md:flex-row h-full overflow-hidden">
-                            {/* Zone d'édition principale */}
-                            <div className="flex-1 p-6 overflow-auto flex items-center justify-center bg-gray-100 relative">
-                                <div className="relative">
-                                    <canvas
-                                        ref={canvasRef}
-                                        className="max-w-full max-h-[70vh] shadow-lg rounded-lg border border-gray-200"
-                                    />
-
-                                    {/* Zone de sélection avec poignées de redimensionnement */}
-                                    {selectedArea && (
-                                        <div
-                                            className="absolute border-2 border-purple-500 bg-purple-100/30"
-                                            style={{
-                                                left: `${selectedArea.x}px`,
-                                                top: `${selectedArea.y}px`,
-                                                width: `${selectedArea.width}px`,
-                                                height: `${selectedArea.height}px`,
-                                            }}
-                                        >
-                                            {/* Poignées de redimensionnement */}
-                                            <div className="absolute -left-1 -top-1 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-nwse-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 'nw')}
-                                            />
-                                            <div className="absolute -right-1 -top-1 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-nesw-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 'ne')}
-                                            />
-                                            <div className="absolute -left-1 -bottom-1 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-nesw-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 'sw')}
-                                            />
-                                            <div className="absolute -right-1 -bottom-1 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-nwse-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 'se')}
-                                            />
-                                            <div className="absolute -left-1 -top-1/2 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-ew-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 'w')}
-                                            />
-                                            <div className="absolute -right-1 -top-1/2 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-ew-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 'e')}
-                                            />
-                                            <div className="absolute -top-1 -left-1/2 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-ns-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 'n')}
-                                            />
-                                            <div className="absolute -bottom-1 -left-1/2 w-3 h-3 bg-white border-2 border-purple-500 rounded-full cursor-ns-resize"
-                                                onMouseDown={(e) => handleResizeStart(e, 's')}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
+                            <div className="flex-1 p-4 overflow-auto flex items-center justify-center bg-gray-50 relative">
+                                <canvas
+                                    ref={canvasRef}
+                                    className="max-w-full max-h-[65vh] shadow-md rounded-md"
+                                />
                             </div>
 
-                            {/* Panneau latéral des outils */}
-                            <div className="md:w-72 bg-white border-l border-gray-200 p-4 space-y-6 overflow-y-auto">
-                                <div>
-                                    <h4 className="font-medium text-lg mb-3">Outils de modification</h4>
+                            <div className="md:w-64 bg-white border-l border-gray-200 p-4 space-y-4 overflow-y-auto">
+                                <h4 className="font-medium text-base mb-2">Outils</h4>
+                                <div className="grid grid-cols-2 gap-2">
                                     <button
-                                        type="button"
-                                        onClick={() => {
-                                            setPixelateMode(true);
-                                            addPixelation();
-                                        }}
-                                        className={`w-full py-3 px-4 rounded-lg flex items-center space-x-3 ${pixelateMode ? 'bg-purple-100 border border-purple-500' : 'border border-gray-300 hover:bg-gray-50'}`}
+                                        onClick={() => addElement('pixelate')}
+                                        className={`py-2 px-3 rounded-md text-sm flex items-center justify-center space-x-1.5 
+                      ${activeTool === 'pixelate' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
                                     >
-                                        <div className="w-6 h-6 bg-gray-300 rounded-sm"></div>
-                                        <span>Ajouter une pixelisation</span>
+                                        <FaTint /> <span>Flou</span>
                                     </button>
 
-                                    {/* Sélection d'emojis */}
-                                    <div>
-                                        <button
-                                            onClick={() => setActiveTool(activeTool === 'emoji' ? null : 'emoji')}
-                                            className={`w-full py-3 px-4 rounded-lg mb-2 ${activeTool === 'emoji' ? 'bg-purple-100 border border-purple-500' : 'border border-gray-300'}`}
-                                        >
-                                            Ajouter un emoji
-                                        </button>
+                                    <button
+                                        onClick={() => setActiveTool(activeTool === 'emoji' ? null : 'emoji')}
+                                        className={`py-2 px-3 rounded-md text-sm flex items-center justify-center space-x-1.5 
+                      ${activeTool === 'emoji' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
+                                    >
+                                        <FaSmile /> <span>Emoji</span>
+                                    </button>
+                                    <button
+                                        onClick={() => removeElement()}
 
-                                        {activeTool === 'emoji' && (
-                                            <div className="grid grid-cols-5 gap-2 p-2 bg-gray-50 rounded-lg">
-                                                {emojis.map(emoji => (
-                                                    <button
-                                                        key={emoji}
-                                                        onClick={() => addEmoji(emoji)}
-                                                        className="text-2xl p-2 hover:bg-gray-200 rounded-lg"
-                                                    >
-                                                        {emoji}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
+                                        className="px-3 py-2 text-sm border rounded hover:bg-gray-100"
+                                    >
+                                        Supprimer sélection
+                                    </button>
 
                                 </div>
 
-                                {pixelateMode && (
-                                    <div className="pt-2">
-                                        <h5 className="text-sm font-medium mb-2">Intensité du flou</h5>
-                                        <input
-                                            type="range"
-                                            min="5"
-                                            max="50"
-                                            value={pixelSize}
-                                            onChange={(e) => {
-                                                const newSize = parseInt(e.target.value);
-                                                setPixelSize(newSize);
-
-                                                // Mettre à jour et re-appliquer toutes les pixelisations
-                                                setPixelElements(prev => {
-                                                    return prev.map(el => {
-                                                        const updatedEl = { ...el, pixelSize: newSize };
-                                                        applyPixelation(updatedEl);
-                                                        return updatedEl;
-                                                    });
-                                                });
-                                            }}
-                                            className="w-full"
-                                        />
-                                        <div className="text-xs text-gray-500 text-right">{pixelSize}px</div>
-
-                                        <div className="mt-4 space-y-2">
-                                            {pixelElements.map((el, index) => (
-                                                <div key={index} className="p-2 bg-gray-50 rounded-lg">
-                                                    <div className="text-sm font-medium mb-1">Zone {index + 1}</div>
-                                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                                        <div>
-                                                            <div className="text-gray-500">Position X</div>
-                                                            <input
-                                                                type="number"
-                                                                value={Math.round(el.x)}
-                                                                onChange={(e) => updatePixelElement(index, 'x', parseInt(e.target.value))}
-                                                                className="w-full p-1 border border-gray-300 rounded"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-gray-500">Position Y</div>
-                                                            <input
-                                                                type="number"
-                                                                value={Math.round(el.y)}
-                                                                onChange={(e) => updatePixelElement(index, 'y', parseInt(e.target.value))}
-                                                                className="w-full p-1 border border-gray-300 rounded"
-                                                            />
-                                                        </div>
-                                                        {/* Ajoutez des contrôles similaires pour width/height */}
-                                                    </div>
-                                                    <button
-                                                        onClick={() => removePixelElement(index)}
-                                                        className="mt-2 text-xs text-red-500 hover:text-red-700"
-                                                    >
-                                                        Supprimer cette zone
-                                                    </button>
-                                                </div>
+                                {activeTool === 'emoji' && (
+                                    <div className="mt-4 pt-4 border-t border-gray-100">
+                                        <div className="grid grid-cols-4 gap-1.5">
+                                            {emojis.slice(0, 12).map(emoji => (
+                                                <button
+                                                    key={emoji}
+                                                    onClick={() => addElement('emoji', emoji)}
+                                                    className="text-2xl p-1 hover:bg-gray-100 rounded-md"
+                                                >
+                                                    {emoji}
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
