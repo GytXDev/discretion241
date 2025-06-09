@@ -13,7 +13,7 @@ interface Profile {
     age: string;
     preferences: string[];
     description: string;
-    tarifs: { un: string; deux: string; nuit: string };
+    tarifs: { un_coup: string; deux_coups: string; nuit: string };
     ville: string;
     quartier: string;
     deplace: boolean;
@@ -33,7 +33,7 @@ export default function ProfilePage() {
         age: '',
         preferences: [],
         description: '',
-        tarifs: { un: '', deux: '', nuit: '' },
+        tarifs: { un_coup: '', deux_coups: '', nuit: '' },
         ville: '',
         quartier: '',
         deplace: false,
@@ -54,15 +54,19 @@ export default function ProfilePage() {
         editingPhoto,
         setEditingPhoto,
         elements,
+        setElements,
         activeTool,
         setActiveTool,
         pixelSize,
         setPixelSize,
+        selectedElementId,
+        emojis,
         addElement,
         removeElement,
         saveEdits,
-        emojis
+        drawCanvas
     } = useImageEditor();
+
 
     useEffect(() => {
         if (!user) {
@@ -96,13 +100,33 @@ export default function ProfilePage() {
                 preview: URL.createObjectURL(file),
                 editedData: undefined
             }));
-        setPendingPhotos(prev => [...prev, ...newFiles].slice(0, 6 - profileData.photos.length));
+        setPendingPhotos(prev => {
+            const updated = [...prev, ...newFiles].slice(0, 6 - profileData.photos.length);
+            if (updated.length > prev.length) {
+                // Ouvre le modal sur la nouvelle photo la plus récente
+                setEditingPhoto({ index: prev.length, src: updated[prev.length].preview });
+            }
+            return updated;
+        });
+
     };
 
-    const removePhoto = (index: number) => {
-        const updated = [...profileData.photos];
-        updated.splice(index, 1);
-        setProfileData(prev => ({ ...prev, photos: updated }));
+    const removePhoto = async (index: number) => {
+        try {
+            await deleteImageFromServer(profileData.photos[index]);
+
+            const updatedPhotos = [...profileData.photos];
+            updatedPhotos.splice(index, 1);
+
+            await updateDoc(doc(db, 'users', user!.uid), {
+                photos: updatedPhotos,
+                lastUpdated: serverTimestamp()
+            });
+
+            setProfileData(prev => ({ ...prev, photos: updatedPhotos }));
+        } catch (error) {
+            setErrorMessage("Erreur lors de la suppression");
+        }
     };
 
     const removePendingPhoto = (index: number) => {
@@ -130,7 +154,6 @@ export default function ProfilePage() {
         setEditingPhoto(null);
     };
 
-
     const uploadImageToServer = async (file: File): Promise<string> => {
         const formData = new FormData();
         formData.append('image', file);
@@ -141,6 +164,22 @@ export default function ProfilePage() {
         const data = await response.json();
         if (!response.ok || !data.url) throw new Error(data.message || "Échec de l'upload");
         return data.url;
+    };
+
+    const deleteImageFromServer = async (imageUrl: string) => {
+        const filename = imageUrl.split('/').pop();
+        if (!filename) throw new Error("Nom de fichier invalide");
+
+        const response = await fetch('https://gytx.dev/discretion241/api/delete_image.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename }),
+        });
+
+        const data = await response.json();
+        if (!response.ok || data.status !== 'success') {
+            throw new Error(data.message || 'Échec de la suppression');
+        }
     };
 
     const handleProfileUpdate = async (e: React.FormEvent) => {
@@ -290,21 +329,18 @@ export default function ProfilePage() {
                     </div>
 
                     {/* Section spécifique au type de profil */}
-                    <div className="p-6 border-b border-gray-200">
-                        <h2 className="text-lg font-semibold mb-4">
-                            {profileData.type === 'proposer' ? 'Détails de votre offre' : 'Détails de votre recherche'}
-                        </h2>
+                    {profileData.type === 'proposer' && (
+                        <div className="p-6 border-b border-gray-200">
+                            <h2 className="text-lg font-semibold mb-4">Détails de votre offre</h2>
 
-                        {profileData.type === 'proposer' ? (
                             <div className="space-y-4">
-                                {/* Champs pour "proposer" */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Tarif 1 coup (CFA)</label>
                                         <input
                                             type="number"
-                                            value={profileData.tarifs.un}
-                                            onChange={(e) => setProfileData({ ...profileData, tarifs: { ...profileData.tarifs, un: e.target.value } })}
+                                            value={profileData.tarifs.un_coup}
+                                            onChange={(e) => setProfileData({ ...profileData, tarifs: { ...profileData.tarifs, un_coup: e.target.value } })}
                                             className="w-full p-2 border border-gray-300 rounded-lg"
                                         />
                                     </div>
@@ -312,8 +348,8 @@ export default function ProfilePage() {
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Tarif 2 coups (CFA)</label>
                                         <input
                                             type="number"
-                                            value={profileData.tarifs.deux}
-                                            onChange={(e) => setProfileData({ ...profileData, tarifs: { ...profileData.tarifs, deux: e.target.value } })}
+                                            value={profileData.tarifs.deux_coups}
+                                            onChange={(e) => setProfileData({ ...profileData, tarifs: { ...profileData.tarifs, deux_coups: e.target.value } })}
                                             className="w-full p-2 border border-gray-300 rounded-lg"
                                         />
                                     </div>
@@ -349,35 +385,9 @@ export default function ProfilePage() {
                                     </label>
                                 </div>
                             </div>
-                        ) : (
-                            <div>
-                                {/* Champs pour "demander" */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Budget approximatif (CFA)</label>
-                                    <input
-                                        type="number"
-                                        value={profileData.tarifs.un} // Réutilise un champ tarif pour le budget
-                                        onChange={(e) => setProfileData({ ...profileData, tarifs: { ...profileData.tarifs, un: e.target.value } })}
-                                        className="w-full p-2 border border-gray-300 rounded-lg"
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="mt-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Description*</label>
-                            <textarea
-                                value={profileData.description}
-                                onChange={(e) => setProfileData({ ...profileData, description: e.target.value })}
-                                className="w-full p-2 border border-gray-300 rounded-lg"
-                                rows={3}
-                                placeholder={profileData.type === 'proposer'
-                                    ? "Décrivez votre offre en détails..."
-                                    : "Décrivez ce que vous recherchez..."}
-                                required
-                            />
                         </div>
-                    </div>
+                    )}
+
 
                     {/* Section Photos */}
                     <div className="p-6 border-b border-gray-200">
@@ -497,37 +507,62 @@ export default function ProfilePage() {
             {editingPhoto && (
                 <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4">
                     <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                            <h3 className="text-lg font-semibold">Éditer la photo</h3>
-                            <div className="flex space-x-2">
-                                <button
-                                    onClick={confirmEdits}
-                                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-                                >Valider</button>
-                                <button
-                                    onClick={() => setEditingPhoto(null)}
-                                    className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700"
-                                >
-                                    <FaTimes />
-                                </button>
+
+                        {/* Header */}
+                        <div className="p-4 border-b border-gray-200">
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="text-lg font-semibold">Éditer la photo</h3>
+                                <div className="flex space-x-2">
+                                    <button
+                                        onClick={confirmEdits}
+                                        className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                                    >
+                                        Valider
+                                    </button>
+                                    <button
+                                        onClick={() => setEditingPhoto(null)}
+                                        className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700"
+                                    >
+                                        <FaTimes />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Texte explicatif */}
+                            <div className="text-sm text-gray-600 bg-gray-50 border border-gray-200 p-3 rounded-md leading-relaxed">
+                                🛡️ Utilisez le flou ou les émojis pour masquer certaines zones sensibles.<br />
+                                Ces modifications apparaîtront sur votre profil public et aident à protéger votre identité.
                             </div>
                         </div>
 
+                        {/* Corps du modal */}
                         <div className="flex flex-col md:flex-row h-full overflow-hidden">
+
+                            {/* Canvas */}
                             <div className="flex-1 p-4 overflow-auto flex items-center justify-center bg-gray-50 relative">
                                 <canvas
                                     ref={canvasRef}
-                                    className="max-w-full max-h-[65vh] shadow-md rounded-md"
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '80vh',
+                                        width: 'auto',
+                                        height: 'auto',
+                                        touchAction: 'none',
+                                        userSelect: 'none',
+                                        cursor: selectedElementId ? 'grab' : 'default',
+                                        border: '1px solid #ccc',
+                                    }}
                                 />
                             </div>
 
+                            {/* Outils */}
                             <div className="md:w-64 bg-white border-l border-gray-200 p-4 space-y-4 overflow-y-auto">
                                 <h4 className="font-medium text-base mb-2">Outils</h4>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         onClick={() => addElement('pixelate')}
                                         className={`py-2 px-3 rounded-md text-sm flex items-center justify-center space-x-1.5 
-                      ${activeTool === 'pixelate' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
+                ${activeTool === 'pixelate' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
                                     >
                                         <FaTint /> <span>Flou</span>
                                     </button>
@@ -535,20 +570,91 @@ export default function ProfilePage() {
                                     <button
                                         onClick={() => setActiveTool(activeTool === 'emoji' ? null : 'emoji')}
                                         className={`py-2 px-3 rounded-md text-sm flex items-center justify-center space-x-1.5 
-                      ${activeTool === 'emoji' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
+                ${activeTool === 'emoji' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
                                     >
                                         <FaSmile /> <span>Emoji</span>
                                     </button>
+
                                     <button
                                         onClick={() => removeElement()}
-
                                         className="px-3 py-2 text-sm border rounded hover:bg-gray-100"
                                     >
                                         Supprimer sélection
                                     </button>
 
+                                    <button
+                                        onClick={() => setElements([])}
+                                        className="px-3 py-2 text-sm border rounded hover:bg-gray-100"
+                                    >
+                                        Réinitialiser
+                                    </button>
                                 </div>
 
+                                {/* Sliders contextuels */}
+                                {selectedElementId && (
+                                    <div className="pt-4 border-t border-gray-100 space-y-4">
+
+                                        {/* Taille de la sélection */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Taille de la sélection
+                                            </label>
+                                            <input
+                                                type="range"
+                                                min={20}
+                                                max={300}
+                                                step={1}
+                                                value={
+                                                    elements.find(el => el.id === selectedElementId)?.width || 50
+                                                }
+                                                onChange={(e) => {
+                                                    const newSize = parseInt(e.target.value);
+                                                    setElements(prev =>
+                                                        prev.map(el =>
+                                                            el.id === selectedElementId
+                                                                ? { ...el, width: newSize, height: newSize }
+                                                                : el
+                                                        )
+                                                    );
+                                                    drawCanvas();
+                                                }}
+                                                className="w-full"
+                                            />
+                                        </div>
+
+                                        {/* Taille des pixels (si flou) */}
+                                        {elements.find(el => el.id === selectedElementId)?.type === 'pixelate' && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Taille des pixels
+                                                </label>
+                                                <input
+                                                    type="range"
+                                                    min={10}
+                                                    max={100}
+                                                    step={1}
+                                                    value={
+                                                        elements.find(el => el.id === selectedElementId)?.pixelSize ?? pixelSize
+                                                    }
+                                                    onChange={(e) => {
+                                                        const newPixelSize = parseInt(e.target.value);
+                                                        setElements(prev =>
+                                                            prev.map(el =>
+                                                                el.id === selectedElementId
+                                                                    ? { ...el, pixelSize: newPixelSize }
+                                                                    : el
+                                                            )
+                                                        );
+                                                        drawCanvas();
+                                                    }}
+                                                    className="w-full"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Choix des emojis */}
                                 {activeTool === 'emoji' && (
                                     <div className="mt-4 pt-4 border-t border-gray-100">
                                         <div className="grid grid-cols-4 gap-1.5">
