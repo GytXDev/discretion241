@@ -4,10 +4,40 @@ import { auth, db } from '../firebase/config';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
+import useImageEditor from '@/hooks/useImageEditor';
+import { FaSmile, FaTimes, FaTint } from 'react-icons/fa';
 
 export default function CompleteProfilePage() {
     const [user] = useAuthState(auth);
     const router = useRouter();
+
+    const {
+            canvasRef,
+            editingPhoto,
+            setEditingPhoto,
+            elements,
+            setElements,
+            activeTool,
+            setActiveTool,
+            pixelSize,
+            setPixelSize,
+            selectedElementId,
+            emojis,
+            addElement,
+            removeElement,
+            saveEdits,
+            drawCanvas
+        } = useImageEditor();
+    
+    const dataURLtoFile = (dataUrl: string, filename: string): File => {
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) u8arr[n] = bstr.charCodeAt(n);
+        return new File([u8arr], filename, { type: mime });
+    };
 
     const [pseudo, setPseudo] = useState('');
     const [type, setType] = useState<'proposer' | 'demander' | ''>('');
@@ -33,7 +63,7 @@ export default function CompleteProfilePage() {
 
     useEffect(() => {
         if (!user) router.push('/login');
-        
+
     }, [user]);
 
     useEffect(() => {
@@ -65,6 +95,20 @@ export default function CompleteProfilePage() {
             setPreviewPhotos(newPreviews);
         }
     };
+
+    const confirmEdits = async () => {
+        const edited = await saveEdits();
+        if (edited && editingPhoto) {
+            const newPhotos = [...photos];
+            const newPreviews = [...previewPhotos];
+            newPhotos[editingPhoto.index] = dataURLtoFile(edited, `edited_${Date.now()}.jpg`);
+            newPreviews[editingPhoto.index] = edited;
+            setPhotos(newPhotos);
+            setPreviewPhotos(newPreviews);
+            setEditingPhoto(null);
+        }
+    };
+
 
     const handleImageUpload = async (): Promise<string[]> => {
         const urls: string[] = [];
@@ -411,7 +455,7 @@ export default function CompleteProfilePage() {
                                     "Ajoutez au moins 1 photo (max 6)"}
                             </p>
                             <p className="text-sm text-gray-500">
-                                Vous pourrez flouter certaines parties de vos photos après l'upload
+                                Utilisez le flou ou les émojis pour masquer certaines zones sensibles ex. visage
                             </p>
                         </div>
 
@@ -436,7 +480,15 @@ export default function CompleteProfilePage() {
                                     >
                                         ×
                                     </button>
+
+                                    <button
+                                        onClick={() => setEditingPhoto({ index, src: preview })}
+                                        className="absolute bottom-1 right-1 bg-white text-gray-700 rounded-full px-2 py-1 text-xs shadow hover:bg-gray-100"
+                                    >
+                                        Modifier
+                                    </button>
                                 </div>
+
                             ))}
 
                             {previewPhotos.length < 6 && (
@@ -473,6 +525,174 @@ export default function CompleteProfilePage() {
                     </div>
                 )}
 
+
+                {/* Modal d'édition d'image simplifié */}
+                {editingPhoto && (
+                    <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4">
+                        <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+
+                            {/* Header */}
+                            <div className="p-4 border-b border-gray-200">
+                                <div className="flex justify-between items-center mb-2">
+                                    <h3 className="text-lg font-semibold">Éditer la photo</h3>
+                                    <div className="flex space-x-2">
+                                        <button
+                                            onClick={confirmEdits}
+                                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                                        >
+                                            Valider
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingPhoto(null)}
+                                            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-700"
+                                        >
+                                            <FaTimes />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Corps du modal */}
+                            <div className="flex flex-col md:flex-row h-full overflow-hidden">
+
+                                {/* Canvas */}
+                                <div className="flex-1 p-4 overflow-auto flex items-center justify-center bg-gray-50 relative">
+                                    <canvas
+                                        ref={canvasRef}
+                                        style={{
+                                            maxWidth: '100%',
+                                            maxHeight: '80vh',
+                                            width: 'auto',
+                                            height: 'auto',
+                                            touchAction: 'none',
+                                            userSelect: 'none',
+                                            cursor: selectedElementId ? 'grab' : 'default',
+                                            border: '1px solid #ccc',
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Outils */}
+                                <div className="md:w-64 bg-white border-l border-gray-200 p-4 space-y-4 overflow-y-auto">
+                                    <h4 className="font-medium text-base mb-2">Outils</h4>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => addElement('pixelate')}
+                                            className={`py-2 px-3 rounded-md text-sm flex items-center justify-center space-x-1.5 
+                                ${activeTool === 'pixelate' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
+                                        >
+                                            <FaTint /> <span>Flou</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => setActiveTool(activeTool === 'emoji' ? null : 'emoji')}
+                                            className={`py-2 px-3 rounded-md text-sm flex items-center justify-center space-x-1.5 
+                                ${activeTool === 'emoji' ? 'bg-blue-100 text-blue-600 border border-blue-300' : 'border border-gray-300 hover:bg-gray-50'}`}
+                                        >
+                                            <FaSmile /> <span>Emoji</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => removeElement()}
+                                            className="px-3 py-2 text-sm border rounded hover:bg-gray-100"
+                                        >
+                                            Supprimer sélection
+                                        </button>
+
+                                        <button
+                                            onClick={() => setElements([])}
+                                            className="px-3 py-2 text-sm border rounded hover:bg-gray-100"
+                                        >
+                                            Réinitialiser
+                                        </button>
+                                    </div>
+
+                                    {/* Sliders contextuels */}
+                                    {selectedElementId && (
+                                        <div className="pt-4 border-t border-gray-100 space-y-4">
+
+                                            {/* Taille de la sélection */}
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Taille de la sélection
+                                                </label>
+                                                <input
+                                                    type="range"
+                                                    min={20}
+                                                    max={300}
+                                                    step={1}
+                                                    value={
+                                                        elements.find(el => el.id === selectedElementId)?.width || 50
+                                                    }
+                                                    onChange={(e) => {
+                                                        const newSize = parseInt(e.target.value);
+                                                        setElements(prev =>
+                                                            prev.map(el =>
+                                                                el.id === selectedElementId
+                                                                    ? { ...el, width: newSize, height: newSize }
+                                                                    : el
+                                                            )
+                                                        );
+                                                        drawCanvas();
+                                                    }}
+                                                    className="w-full"
+                                                />
+                                            </div>
+
+                                            {/* Taille des pixels (si flou) */}
+                                            {elements.find(el => el.id === selectedElementId)?.type === 'pixelate' && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Taille des pixels
+                                                    </label>
+                                                    <input
+                                                        type="range"
+                                                        min={10}
+                                                        max={100}
+                                                        step={1}
+                                                        value={
+                                                            elements.find(el => el.id === selectedElementId)?.pixelSize ?? pixelSize
+                                                        }
+                                                        onChange={(e) => {
+                                                            const newPixelSize = parseInt(e.target.value);
+                                                            setElements(prev =>
+                                                                prev.map(el =>
+                                                                    el.id === selectedElementId
+                                                                        ? { ...el, pixelSize: newPixelSize }
+                                                                        : el
+                                                                )
+                                                            );
+                                                            drawCanvas();
+                                                        }}
+                                                        className="w-full"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Choix des emojis */}
+                                    {activeTool === 'emoji' && (
+                                        <div className="mt-4 pt-4 border-t border-gray-100">
+                                            <div className="grid grid-cols-4 gap-1.5">
+                                                {emojis.slice(0, 12).map(emoji => (
+                                                    <button
+                                                        key={emoji}
+                                                        onClick={() => addElement('emoji', emoji)}
+                                                        className="text-2xl p-1 hover:bg-gray-100 rounded-md"
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {uploading && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                         <div className="bg-white p-6 rounded-lg max-w-sm w-full text-center">
@@ -486,6 +706,9 @@ export default function CompleteProfilePage() {
                         </div>
                     </div>
                 )}
+
+
+
 
                 <p className="mt-6 text-sm text-center text-gray-600">
                     Après validation, contactez le support via WhatsApp pour vérification.

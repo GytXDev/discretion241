@@ -6,3 +6,19 @@ body {
   @apply bg-gray-100 text-gray-900;
   font-family: var(--font-poppins), sans-serif;
 }
+
+@keyframes slideDownFade {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0px);
+    opacity: 1;
+  }
+}
+
+.animate-slide-down {
+  animation: slideDownFade 0.25s ease-out forwards;
+}

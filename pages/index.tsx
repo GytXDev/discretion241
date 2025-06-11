@@ -4,6 +4,8 @@ import { collection, query, where, getDocs, getDoc, doc } from "firebase/firesto
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter } from "next/router";
 import Image from "next/image";
+import { FaBars } from "react-icons/fa";
+import { FiLogIn, FiLogOut, FiUser, FiUserPlus, FiX } from "react-icons/fi";
 
 interface Profile {
   uid: string;
@@ -31,6 +33,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [randomFrames, setRandomFrames] = useState<string[]>([]);
   const router = useRouter();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   /* ==================== RANDOM FRAMES ==================== */
   useEffect(() => {
@@ -291,21 +294,23 @@ export default function Home() {
 
   /* ==================== HEADER ==================== */
   const Header = () => (
-    <header className="bg-white shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 py-3">
+    <header className="bg-white shadow-sm sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 py-2 sm:py-3">
         <div className="flex justify-between items-center">
+          {/* Logo */}
           <button onClick={() => router.push("/")} className="focus:outline-none">
             <Image
               src="/logo.png"
               alt="Logo"
-              width={160}
-              height={60}
+              width={120}
+              height={45}
+              className="sm:w-[160px] sm:h-[60px]"
               priority
             />
-
           </button>
 
-          <div className="flex items-center gap-2">
+          {/* Desktop Buttons */}
+          <div className="hidden sm:flex items-center gap-2">
             {user ? (
               <>
                 <button
@@ -337,10 +342,92 @@ export default function Home() {
                 </button>
               </>
             )}
-
           </div>
+
+          {/* Mobile Menu Button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="sm:hidden p-2 rounded-md hover:bg-gray-100 transition"
+            aria-label="Menu"
+          >
+            {isMobileMenuOpen ? (
+              <FiX className="text-xl text-gray-700" />
+            ) : (
+              <FaBars className="text-xl text-gray-700" />
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Mobile Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="absolute top-0 left-0 right-0 z-40 sm:hidden bg-white/90 backdrop-blur-md rounded-b-2xl shadow-lg max-h-[90vh] overflow-y-auto">
+          {/* Bouton fermer en haut à droite */}
+          <div className="absolute top-4 right-4">
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-2 rounded-full hover:bg-gray-100 transition"
+              aria-label="Fermer"
+            >
+              <FiX className="text-xl text-gray-700" />
+            </button>
+          </div>
+
+          {/* Contenu en haut, sans centrage vertical */}
+          <div className="flex flex-col items-center px-6 pt-20 mb-6">
+            <nav className="w-full max-w-sm space-y-4">
+              {user ? (
+                <>
+                  <button
+                    onClick={() => {
+                      router.push("/profile");
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                  >
+                    <FiUser className="text-xl" />
+                    <span>Mon compte</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      auth.signOut();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                  >
+                    <FiLogOut className="text-xl" />
+                    <span>Déconnexion</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      router.push("/login");
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                  >
+                    <FiLogIn className="text-xl" />
+                    <span>Connexion</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      router.push("/login");
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full py-4 px-6 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition flex items-center justify-center gap-3 text-lg"
+                  >
+                    <FiUserPlus className="text-xl" />
+                    <span>S'inscrire</span>
+                  </button>
+                </>
+              )}
+            </nav>
+          </div>
+        </div>
+      )}
+
     </header>
   );
 
