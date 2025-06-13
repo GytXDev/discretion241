@@ -12,23 +12,23 @@ export default function CompleteProfilePage() {
     const router = useRouter();
 
     const {
-            canvasRef,
-            editingPhoto,
-            setEditingPhoto,
-            elements,
-            setElements,
-            activeTool,
-            setActiveTool,
-            pixelSize,
-            setPixelSize,
-            selectedElementId,
-            emojis,
-            addElement,
-            removeElement,
-            saveEdits,
-            drawCanvas
-        } = useImageEditor();
-    
+        canvasRef,
+        editingPhoto,
+        setEditingPhoto,
+        elements,
+        setElements,
+        activeTool,
+        setActiveTool,
+        pixelSize,
+        setPixelSize,
+        selectedElementId,
+        emojis,
+        addElement,
+        removeElement,
+        saveEdits,
+        drawCanvas
+    } = useImageEditor();
+
     const dataURLtoFile = (dataUrl: string, filename: string): File => {
         const arr = dataUrl.split(',');
         const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
@@ -56,6 +56,8 @@ export default function CompleteProfilePage() {
     const [errorMessage, setErrorMessage] = useState('');
     const [currentStep, setCurrentStep] = useState(1);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [contact, setContact] = useState('');
+
 
     const villes = ['Libreville', 'Franceville', 'Moanda', 'Port Gentil', 'Oyem'];
     const genres = ['femme', 'homme', 'autre'];
@@ -176,6 +178,18 @@ export default function CompleteProfilePage() {
             return setErrorMessage(`Nombre de photos insuffisant (${type === 'proposer' ? '2 minimum' : '1 minimum'}).`);
         }
 
+        // Validation du format du contact (nouveaux préfixes)
+        useEffect(() => {
+            const contactRegex = /^(060|062|065|066|074|077)\d{6}$/;
+            if (contact && !contactRegex.test(contact)) {
+                setErrorMessage("Le contact doit commencer par 060, 062, 065, 066, 074 ou 077 et contenir 8 chiffres au total");
+            } else {
+                setErrorMessage('');
+            }
+        }, [contact]);
+
+
+
         setUploading(true);
         try {
             // 1. Upload des images
@@ -189,6 +203,8 @@ export default function CompleteProfilePage() {
                 genre,
                 age: parseInt(age),
                 type,
+                role: 'user',
+                contact,
                 preferences: preferences.includes('tous') ? ['femmes', 'hommes'] : preferences,
                 description: type === 'proposer' ? description : '',
                 tarifs: type === 'proposer' ? {
@@ -302,6 +318,17 @@ export default function CompleteProfilePage() {
                             value={age}
                             onChange={(e) => setAge(e.target.value)}
                             required
+                        />
+
+                        <input
+                            type="text"
+                            placeholder="Contact (ex: 077123456)"
+                            className="w-full p-4 rounded-2xl border border-gray-300 bg-gray-50 text-lg"
+                            value={contact}
+                            onChange={(e) => setContact(e.target.value)}
+                            required
+                            pattern="(060|062|065|066|074|077)\d{6}"
+                            title="Le numéro doit commencer par 060, 062, 065, 066, 074 ou 077 et contenir 8 chiffres"
                         />
 
                         <button

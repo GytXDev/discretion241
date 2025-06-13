@@ -45,7 +45,7 @@ export default function Home() {
     { label: "22 – 25 ans", min: 22, max: 25 },
     { label: "26 – 31 ans", min: 26, max: 31 },
   ];
-
+  const [userData, setUserData] = useState<{ role?: string } | null>(null);
 
   /* ==================== RANDOM FRAMES ==================== */
   useEffect(() => {
@@ -377,165 +377,201 @@ export default function Home() {
   };
 
   /* ==================== HEADER ==================== */
-  const Header = () => (
-    <header className="bg-white shadow-sm sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 py-2 sm:py-3">
-        <div className="flex justify-between items-center">
-          {/* Logo */}
-          <button onClick={() => router.push("/")} className="focus:outline-none">
-            <Image
-              src="/logo.png"
-              alt="Logo"
-              width={120}
-              height={45}
-              className="sm:w-[160px] sm:h-[60px]"
-              priority
-            />
-          </button>
+  const Header = () => {
+    const [userData, setUserData] = useState<any>(null);
 
-          {/* Desktop Buttons */}
-          <div className="hidden sm:flex items-center gap-2">
-            {user ? (
-              <>
-                <button
-                  onClick={() => router.push("/profile")}
-                  className="px-4 py-1.5 text-sm rounded-full bg-purple-100 text-purple-800 hover:bg-purple-200 transition"
-                >
-                  Mon compte
-                </button>
-                <button
-                  onClick={() => auth.signOut()}
-                  className="px-4 py-1.5 text-sm rounded-full bg-gray-100 hover:bg-gray-200 transition"
-                >
-                  Déconnexion
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => router.push("/login")}
-                  className="px-4 py-1.5 text-sm rounded-full border hover:bg-gray-50 transition"
-                >
-                  Connexion
-                </button>
-                <button
-                  onClick={() => router.push("/login")}
-                  className="px-4 py-1.5 text-sm rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 transition"
-                >
-                  S'inscrire
-                </button>
-              </>
-            )}
-          </div>
+    useEffect(() => {
+      if (user) {
+        getDoc(doc(db, "users", user.uid)).then((doc) => {
+          if (doc.exists()) {
+            setUserData(doc.data());
+          }
+        });
+      }
+    }, [user]);
 
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="sm:hidden p-2 rounded-md hover:bg-gray-100 transition"
-            aria-label="Menu"
-          >
-            {isMobileMenuOpen ? (
-              <FiX className="text-xl text-gray-700" />
-            ) : (
-              <FaBars className="text-xl text-gray-700" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Dropdown */}
-      {isMobileMenuOpen && (
-        <div className="absolute top-0 left-0 right-0 z-40 sm:hidden bg-white/90 backdrop-blur-md rounded-b-2xl shadow-lg max-h-[90vh] overflow-y-auto">
-          {/* Bouton fermer en haut à droite */}
-          <div className="absolute top-4 right-4">
-            <button
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="p-2 rounded-full hover:bg-gray-100 transition"
-              aria-label="Fermer"
-            >
-              <FiX className="text-xl text-gray-700" />
+    return (
+      <header className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-2 sm:py-3">
+          <div className="flex justify-between items-center">
+            {/* Logo */}
+            <button onClick={() => router.push("/")} className="focus:outline-none">
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={120}
+                height={45}
+                className="sm:w-[160px] sm:h-[60px]"
+                priority
+              />
             </button>
-          </div>
 
-          {/* Contenu en haut, sans centrage vertical */}
-          <div className="flex flex-col items-center px-6 pt-20 mb-6">
-            <nav className="w-full max-w-sm space-y-4">
+            {/* Desktop Buttons */}
+            <div className="hidden sm:flex items-center gap-2">
               {user ? (
                 <>
+                  {userData?.role === "admin" && (
+                    <button
+                      onClick={() => router.push("/admin/verify")}
+                      className="px-4 py-1.5 text-sm rounded-full bg-red-100 text-red-800 hover:bg-red-200 transition"
+                    >
+                      Admin
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      router.push("/profile");
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                    onClick={() => router.push("/profile")}
+                    className="px-4 py-1.5 text-sm rounded-full bg-purple-100 text-purple-800 hover:bg-purple-200 transition"
                   >
-                    <FiUser className="text-xl" />
-                    <span>Mon compte</span>
+                    Mon compte
                   </button>
                   <button
-                    onClick={() => {
-                      auth.signOut();
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                    onClick={() => auth.signOut()}
+                    className="px-4 py-1.5 text-sm rounded-full bg-gray-100 hover:bg-gray-200 transition"
                   >
-                    <FiLogOut className="text-xl" />
-                    <span>Déconnexion</span>
+                    Déconnexion
                   </button>
                 </>
               ) : (
                 <>
                   <button
-                    onClick={() => {
-                      router.push("/login");
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                    onClick={() => router.push("/login")}
+                    className="px-4 py-1.5 text-sm rounded-full border hover:bg-gray-50 transition"
                   >
-                    <FiLogIn className="text-xl" />
-                    <span>Connexion</span>
+                    Connexion
                   </button>
                   <button
-                    onClick={() => {
-                      router.push("/login");
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className="w-full py-4 px-6 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition flex items-center justify-center gap-3 text-lg"
+                    onClick={() => router.push("/login")}
+                    className="px-4 py-1.5 text-sm rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 transition"
                   >
-                    <FiUserPlus className="text-xl" />
-                    <span>S'inscrire</span>
+                    S'inscrire
                   </button>
                 </>
               )}
-            </nav>
+            </div>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="sm:hidden p-2 rounded-md hover:bg-gray-100 transition"
+              aria-label="Menu"
+            >
+              {isMobileMenuOpen ? (
+                <FiX className="text-xl text-gray-700" />
+              ) : (
+                <FaBars className="text-xl text-gray-700" />
+              )}
+            </button>
           </div>
         </div>
-      )}
 
-    </header>
-  );
+        {/* Mobile Dropdown */}
+        {isMobileMenuOpen && (
+          <div className="absolute top-0 left-0 right-0 z-40 sm:hidden bg-white/90 backdrop-blur-md rounded-b-2xl shadow-lg max-h-[90vh] overflow-y-auto">
+            {/* Bouton fermer en haut à droite */}
+            <div className="absolute top-4 right-4">
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2 rounded-full hover:bg-gray-100 transition"
+                aria-label="Fermer"
+              >
+                <FiX className="text-xl text-gray-700" />
+              </button>
+            </div>
+
+            {/* Contenu en haut, sans centrage vertical */}
+            <div className="flex flex-col items-center px-6 pt-20 mb-6">
+              <nav className="w-full max-w-sm space-y-4">
+                {user ? (
+                  <>
+                    {userData?.role === "admin" && (
+                      <button
+                        onClick={() => {
+                          router.push("/admin/verify");
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-red-800 hover:bg-red-100 transition text-lg font-medium"
+                      >
+                        <FiUser className="text-xl" />
+                        <span>Admin</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        router.push("/profile");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                    >
+                      <FiUser className="text-xl" />
+                      <span>Mon compte</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        auth.signOut();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                    >
+                      <FiLogOut className="text-xl" />
+                      <span>Déconnexion</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        router.push("/login");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
+                    >
+                      <FiLogIn className="text-xl" />
+                      <span>Connexion</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        router.push("/login");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="w-full py-4 px-6 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition flex items-center justify-center gap-3 text-lg"
+                    >
+                      <FiUserPlus className="text-xl" />
+                      <span>S'inscrire</span>
+                    </button>
+                  </>
+                )}
+              </nav>
+            </div>
+          </div>
+        )}
+      </header>
+    );
+  };
 
   /* ==================== MAIN CONTENT ==================== */
+  const filteredProfiles = profiles.filter((profile) => {
+    // Filtre par ville
+    if (selectedVille && profile.ville !== selectedVille) return false;
+
+    // Filtre par tranche d'âge
+    if (selectedAgeRange) {
+      const range = AGE_RANGES.find(r => r.label === selectedAgeRange);
+      if (range && (profile.age < range.min || profile.age > range.max)) return false;
+    }
+
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="flex justify-end items-center mb-6">
-          <button
-            onClick={() => window.location.reload()}
-            className="text-sm flex items-center text-gray-500 hover:text-gray-700"
-          >
-            <RefreshIcon className="h-4 w-4 mr-1" />
-            Actualiser
-          </button>
-        </div>
-
         <FilterBar />
 
-        {loading ? renderShimmer() : profiles.length === 0 ? renderEmpty() : (
+        {loading ? renderShimmer() : filteredProfiles.length === 0 ? renderEmpty() : (
           <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {profiles.map((profile) => (
+            {filteredProfiles.map((profile) => (
               <ProfileCard key={profile.uid} profile={profile} />
             ))}
           </div>
