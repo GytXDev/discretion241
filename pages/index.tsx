@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { db, auth } from "../firebase/config";
-import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc, updateDoc } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import { FaBars } from "react-icons/fa";
-import { FiFilter, FiLogIn, FiLogOut, FiUser, FiUserPlus, FiX, FiXCircle } from "react-icons/fi";
+import { FiChevronDown, FiChevronUp, FiFilter, FiLogIn, FiLogOut, FiUser, FiUserPlus, FiX, FiXCircle } from "react-icons/fi";
+import PrivacyModal from "./privacy_modal";
+import PaymentButton from "./payment/payment_button";
 
 interface Profile {
   uid: string;
@@ -23,8 +25,7 @@ interface Profile {
   ville: string;
   quartier?: string;
   photos: string[];
-  contactVisibleUntil?: number;
-  phone?: string;
+  contact?: string;
 }
 
 export default function Home() {
@@ -44,8 +45,8 @@ export default function Home() {
     { label: "18 – 22 ans", min: 18, max: 22 },
     { label: "22 – 25 ans", min: 22, max: 25 },
     { label: "26 – 31 ans", min: 26, max: 31 },
+    { label: "31 ans et plus", min: 31, max: 99 },
   ];
-  const [userData, setUserData] = useState<{ role?: string } | null>(null);
 
   /* ==================== RANDOM FRAMES ==================== */
   useEffect(() => {
@@ -62,6 +63,10 @@ export default function Home() {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
+
+          if (userData.contact && /^0[0-9]{8}$/.test(userData.contact)) {
+            localStorage.setItem("user_phone", userData.contact);
+          }
 
           if (userData.step === "profile") {
             router.push("/complete_profile");
@@ -94,67 +99,82 @@ export default function Home() {
   }, [user, router]);
 
 
-  const FilterBar = () => (
-    <div className="sticky top-[70px] z-40 bg-white/80 backdrop-blur-lg rounded-b-2xl shadow-md px-5 py-4 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6 border-b border-gray-200">
-      {/* Titre + Icone */}
-      <div className="flex items-center gap-2 text-gray-700 font-semibold text-base sm:text-lg">
-        <FiFilter className="text-purple-600" />
-        Filtres personnalisés
-      </div>
+  const FilterBar = () => {
+    const [isOpen, setIsOpen] = useState(true);
 
-      {/* Sélecteurs */}
-      <div className="flex flex-wrap gap-4 items-center">
-        {/* Âges */}
-        <div className="flex gap-2">
-          {AGE_RANGES.map((range) => {
-            const isActive = selectedAgeRange === range.label;
-            return (
-              <button
-                key={range.label}
-                onClick={() =>
-                  setSelectedAgeRange(isActive ? null : range.label)
-                }
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${isActive
-                  ? "bg-purple-600 text-white border-purple-600"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-              >
-                {range.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Ville */}
-        <select
-          value={selectedVille || ""}
-          onChange={(e) => setSelectedVille(e.target.value || null)}
-          className="text-sm px-3 py-1.5 rounded-full border bg-gray-50 border-gray-300 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-purple-400"
+    return (
+      <div className="sticky top-[70px] z-40 bg-white/80 backdrop-blur-lg rounded-b-2xl shadow-md px-5 py-2 mb-6 border-b border-gray-200">
+        {/* Titre + Icone cliquable */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex items-center justify-between gap-2 text-gray-700 font-semibold text-base sm:text-lg py-2"
         >
-          <option value="">Toutes les villes</option>
-          {villes.map((ville) => (
-            <option key={ville} value={ville}>
-              {ville}
-            </option>
-          ))}
-        </select>
+          <div className="flex items-center gap-2">
+            <FiFilter className="text-purple-600" />
+            Filtres personnalisés
+          </div>
+          {isOpen ? <FiChevronUp /> : <FiChevronDown />}
+        </button>
 
-        {/* Réinitialiser */}
-        {(selectedAgeRange || selectedVille) && (
-          <button
-            onClick={() => {
-              setSelectedAgeRange(null);
-              setSelectedVille(null);
-            }}
-            className="flex items-center text-sm text-red-500 hover:text-red-600 gap-1"
-          >
-            <FiXCircle className="text-base" />
-            Réinitialiser
-          </button>
+        {/* Contenu des filtres (visible seulement si isOpen) */}
+        {isOpen && (
+          <div className="pb-2">
+            {/* Sélecteurs */}
+            <div className="flex flex-wrap gap-4 items-center">
+              {/* Âges */}
+              <div className="flex flex-wrap gap-2">
+                {AGE_RANGES.map((range) => {
+                  const isActive = selectedAgeRange === range.label;
+                  return (
+                    <button
+                      key={range.label}
+                      onClick={() =>
+                        setSelectedAgeRange(isActive ? null : range.label)
+                      }
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${isActive
+                          ? "bg-purple-600 text-white border-purple-600"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                    >
+                      {range.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Ville */}
+              <select
+                value={selectedVille || ""}
+                onChange={(e) => setSelectedVille(e.target.value || null)}
+                className="text-sm px-3 py-1.5 rounded-full border bg-gray-50 border-gray-300 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-purple-400"
+              >
+                <option value="">Toutes les villes</option>
+                {villes.map((ville) => (
+                  <option key={ville} value={ville}>
+                    {ville}
+                  </option>
+                ))}
+              </select>
+
+              {/* Réinitialiser */}
+              {(selectedAgeRange || selectedVille) && (
+                <button
+                  onClick={() => {
+                    setSelectedAgeRange(null);
+                    setSelectedVille(null);
+                  }}
+                  className="flex items-center text-sm text-red-500 hover:text-red-600 gap-1"
+                >
+                  <FiXCircle className="text-base" />
+                  Réinitialiser
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
 
   /* ==================== SHIMMER ==================== */
@@ -256,6 +276,22 @@ export default function Home() {
   /* ==================== PROFILE CARD ==================== */
   const ProfileCard = ({ profile }: { profile: Profile }) => {
     const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+    const [canSeeContact, setCanSeeContact] = useState(false);
+
+
+    useEffect(() => {
+      if (user) {
+        getDoc(doc(db, "users", user.uid)).then((docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const expiresAt = data?.contacts?.[profile.uid];
+            if (expiresAt && Date.now() < expiresAt) {
+              setCanSeeContact(true);
+            }
+          }
+        });
+      }
+    }, [user, profile.uid]);
 
     return (
       <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition">
@@ -365,12 +401,47 @@ export default function Home() {
             </div>
           )}
 
-          <button
-            onClick={() => user ? alert("Paiement à venir !") : router.push("/login")}
-            className="mt-4 w-full py-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:opacity-90 transition"
-          >
-            Voir le contact
-          </button>
+
+          {user ? (
+            canSeeContact ? (
+              <div className="mt-4 py-2 w-full text-center rounded-full bg-green-100 text-green-800 font-semibold">
+                <div className="flex items-center justify-center gap-2 text-green-300 font-semibold">
+                  <img src="/icons/whatsapp.png" alt="WhatsApp" className="w-5 h-5" />
+                  <a
+                    href={`https://wa.me/241${profile.contact}?text=Bonjour ${profile.pseudo}, je suis intéressé(e) par ton profil vu sur Discretion241.`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-green-400"
+                  >
+                    {profile.contact}
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <PaymentButton
+                profileName={profile.pseudo}
+                profileUid={profile.uid}
+                onSuccess={async () => {
+                  const now = Date.now();
+                  const duration = 24 * 60 * 60 * 1000;
+                  await updateDoc(doc(db, "users", user.uid), {
+                    [`contacts.${profile.uid}`]: now + duration
+                  });
+                  setCanSeeContact(true); // mettre à jour l'état
+                }}
+              />
+            )
+          ) : (
+            <button
+              onClick={() => router.push("/login")}
+              className="mt-4 w-full py-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:opacity-90 transition"
+            >
+              Voir le contact
+            </button>
+          )}
+
+
+
         </div>
       </div>
     );
@@ -577,7 +648,9 @@ export default function Home() {
           </div>
         )}
       </main>
+      <PrivacyModal />
     </div>
+
   );
 }
 

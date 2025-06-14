@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { auth, db } from '../firebase/config';
+import { auth, db } from '../../firebase/config';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import Image from 'next/image';
