@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { auth, db } from '../firebase/config';
+import { auth, db } from '../../firebase/config';
 import {
     createUserWithEmailAndPassword,
     GoogleAuthProvider,
@@ -20,11 +20,11 @@ export default function RegisterPage() {
     const redirectToProfile = async () => {
         try {
             console.log("Redirection vers /complete_profile");
-            await router.push("/complete_profile");
+            await router.push("../profile/complete_profile");
             // Fallback au cas où Next Router ne redirige pas
             setTimeout(() => {
-                if (window.location.pathname !== "/complete_profile") {
-                    window.location.href = "/complete_profile";
+                if (window.location.pathname !== "../profile/complete_profile") {
+                    window.location.href = "../profile/complete_profile";
                 }
             }, 1000);
         } catch (err) {
@@ -178,7 +178,7 @@ export default function RegisterPage() {
                 <p className="mt-6 text-center text-sm text-gray-600">
                     Déjà inscrit ?{' '}
                     <button
-                        onClick={() => router.push('/login')}
+                        onClick={() => router.push('/auth/login')}
                         className="text-pink-600 hover:underline"
                     >
                         Connexion

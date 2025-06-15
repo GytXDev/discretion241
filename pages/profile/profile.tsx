@@ -5,6 +5,7 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import useImageEditor from '@/hooks/useImageEditor';
 import { FaSmile, FaTimes, FaTrash, FaPlus, FaEdit, FaTint } from 'react-icons/fa';
+import ToastManager, { addToast } from '../ui/ToastManager';
 
 interface Profile {
     pseudo: string;
@@ -44,8 +45,6 @@ export default function ProfilePage() {
 
     const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string; editedData?: string }[]>([]);
     const [uploading, setUploading] = useState(false);
-    const [errorMessage, setErrorMessage] = useState('');
-    const [successMessage, setSuccessMessage] = useState('');
     const [showContactForm, setShowContactForm] = useState(false);
     const [contact, setContact] = useState('');
 
@@ -70,7 +69,7 @@ export default function ProfilePage() {
 
     useEffect(() => {
         if (!user) {
-            router.push('/login');
+            router.push('../auth/login');
             return;
         }
 
@@ -125,7 +124,7 @@ export default function ProfilePage() {
 
             setProfileData(prev => ({ ...prev, photos: updatedPhotos }));
         } catch (error) {
-            setErrorMessage("Erreur lors de la suppression");
+            addToast((error as Error).message || "Erreur lors de la suppression");
         }
     };
 
@@ -200,9 +199,9 @@ export default function ProfilePage() {
             });
             setPendingPhotos([]);
             setProfileData(prev => ({ ...prev, photos: [...prev.photos, ...uploadedUrls] }));
-            setSuccessMessage('Profil mis à jour avec succès');
+            addToast("Profil mis à jour avec succès", "success");
         } catch (error) {
-            setErrorMessage((error as Error).message || 'Erreur lors de la mise à jour');
+            addToast((error as Error).message || "Erreur lors de la mise à jour", "error");
         } finally {
             setUploading(false);
         }
@@ -217,9 +216,9 @@ export default function ProfilePage() {
             });
             setProfileData(prev => ({ ...prev, contact }));
             setShowContactForm(false);
-            setSuccessMessage('Contact mis à jour');
+            addToast("Contact mis à jour", "success");
         } catch (error) {
-            setErrorMessage((error as Error).message || 'Erreur lors de la mise à jour du contact');
+            addToast((error as Error).message || "Erreur lors de la mise à jour du contact", "error");
         }
     };
 
@@ -236,18 +235,6 @@ export default function ProfilePage() {
                         Retour
                     </button>
                 </div>
-
-                {/* Messages d'état */}
-                {errorMessage && (
-                    <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
-                        {errorMessage}
-                    </div>
-                )}
-                {successMessage && (
-                    <div className="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 mb-6 rounded">
-                        {successMessage}
-                    </div>
-                )}
 
                 {/* Formulaire principal */}
                 <form onSubmit={handleProfileUpdate} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -317,13 +304,20 @@ export default function ProfilePage() {
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Ville*</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={profileData.ville}
                                     onChange={(e) => setProfileData({ ...profileData, ville: e.target.value })}
                                     className="w-full p-2 border border-gray-300 rounded-lg"
                                     required
-                                />
+                                >
+                                    <option value="">Sélectionnez une ville</option>
+                                    <option value="Libreville">Libreville</option>
+                                    <option value="Franceville">Franceville</option>
+                                    <option value="Moanda">Moanda</option>
+                                    <option value="Port Gentil">Port Gentil</option>
+                                    <option value="Oyem">Oyem</option>
+                                </select>
+
                             </div>
                         </div>
                     </div>
@@ -721,7 +715,11 @@ export default function ProfilePage() {
                         </form>
                     </div>
                 </div>
+                
             )}
+
+            <ToastManager />
+            
         </div>
     );
 }

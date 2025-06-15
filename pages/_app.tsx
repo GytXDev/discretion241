@@ -1,11 +1,11 @@
 // pages/_app.tsx
 import "@/styles/globals.css";
 import type { AppProps } from "next/app";
-
-// Import de Poppins via next/font/google
 import { Poppins } from "next/font/google";
+import Head from "next/head";
+import ToastManager from "./ui/ToastManager";
 
-// Charger Poppins (poids réguliers et semi-bold) avec un fallback sans-serif
+// Import de la police
 const poppins = Poppins({
   subsets: ["latin"],
   weight: ["400", "600"],
@@ -14,9 +14,18 @@ const poppins = Poppins({
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    // On applique la classe variable à tout le <body>
-    <main className={`${poppins.variable} font-sans`}>
-      <Component {...pageProps} />
-    </main>
+    <>
+      {/* Default meta fallback */}
+      <Head>
+        <title>Discretion241 – Plateforme confidentielle au Gabon</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
+      <main
+        className={`${poppins.variable} font-sans`}
+      >
+        <Component {...pageProps} />
+      </main>
+
+    </>
   );
 }

@@ -58,20 +58,16 @@ export default function CompleteProfilePage() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [contact, setContact] = useState('');
 
-
     const villes = ['Libreville', 'Franceville', 'Moanda', 'Port Gentil', 'Oyem'];
     const genres = ['femme', 'homme', 'autre'];
     const preferenceOptions = ['femmes', 'hommes', 'tous'];
 
     useEffect(() => {
-        if (!user) router.push('/login');
-
+        if (!user) router.push('../auth/login');
     }, [user]);
 
     useEffect(() => {
-        // Copie des URLs actuelles pour le nettoyage
         const currentPreviews = [...previewPhotos];
-
         return () => {
             currentPreviews.forEach(url => {
                 try {
@@ -83,11 +79,15 @@ export default function CompleteProfilePage() {
         };
     }, [previewPhotos]);
 
+    const validateContact = (contact: string): boolean => {
+        const contactRegex = /^(060|062|065|066|074|077)\d{6}$/;
+        return contactRegex.test(contact);
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
-
-            const newPhotos = [...photos, ...files].slice(0, 6); // max 6
+            const newPhotos = [...photos, ...files].slice(0, 6);
             const newPreviews = [
                 ...previewPhotos,
                 ...files.map(file => URL.createObjectURL(file)),
@@ -110,7 +110,6 @@ export default function CompleteProfilePage() {
             setEditingPhoto(null);
         }
     };
-
 
     const handleImageUpload = async (): Promise<string[]> => {
         const urls: string[] = [];
@@ -170,6 +169,11 @@ export default function CompleteProfilePage() {
         e.preventDefault();
         setErrorMessage('');
 
+        // Validation du contact
+        if (!validateContact(contact)) {
+            return setErrorMessage("Le contact doit commencer par 060, 062, 065, 066, 074 ou 077 et contenir 8 chiffres au total");
+        }
+
         if (!pseudo || !type || !genre || !age || preferences.length === 0) {
             return setErrorMessage("Tous les champs sont obligatoires.");
         }
@@ -178,24 +182,10 @@ export default function CompleteProfilePage() {
             return setErrorMessage(`Nombre de photos insuffisant (${type === 'proposer' ? '2 minimum' : '1 minimum'}).`);
         }
 
-        // Validation du format du contact (nouveaux préfixes)
-        useEffect(() => {
-            const contactRegex = /^(060|062|065|066|074|077)\d{6}$/;
-            if (contact && !contactRegex.test(contact)) {
-                setErrorMessage("Le contact doit commencer par 060, 062, 065, 066, 074 ou 077 et contenir 8 chiffres au total");
-            } else {
-                setErrorMessage('');
-            }
-        }, [contact]);
-
-
-
         setUploading(true);
         try {
-            // 1. Upload des images
             const uploadedURLs = await handleImageUpload();
 
-            // 2. Enregistrement dans Firestore
             const userData = {
                 uid: user?.uid,
                 email: user?.email,
@@ -224,7 +214,7 @@ export default function CompleteProfilePage() {
             };
 
             await setDoc(doc(db, 'users', user!.uid), userData);
-            router.push('/verify');
+            router.push('/profile/verify');
         } catch (err) {
             console.error("Erreur enregistrement:", err);
             setErrorMessage(
@@ -552,13 +542,9 @@ export default function CompleteProfilePage() {
                     </div>
                 )}
 
-
-                {/* Modal d'édition d'image simplifié */}
                 {editingPhoto && (
                     <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-2 sm:p-4">
                         <div className="bg-white rounded-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-
-                            {/* Header */}
                             <div className="p-4 border-b border-gray-200">
                                 <div className="flex justify-between items-center mb-2">
                                     <h3 className="text-lg font-semibold">Éditer la photo</h3>
@@ -579,10 +565,7 @@ export default function CompleteProfilePage() {
                                 </div>
                             </div>
 
-                            {/* Corps du modal */}
                             <div className="flex flex-col md:flex-row h-full overflow-hidden">
-
-                                {/* Canvas */}
                                 <div className="flex-1 p-4 overflow-auto flex items-center justify-center bg-gray-50 relative">
                                     <canvas
                                         ref={canvasRef}
@@ -599,7 +582,6 @@ export default function CompleteProfilePage() {
                                     />
                                 </div>
 
-                                {/* Outils */}
                                 <div className="md:w-64 bg-white border-l border-gray-200 p-4 space-y-4 overflow-y-auto">
                                     <h4 className="font-medium text-base mb-2">Outils</h4>
                                     <div className="grid grid-cols-2 gap-2">
@@ -634,11 +616,8 @@ export default function CompleteProfilePage() {
                                         </button>
                                     </div>
 
-                                    {/* Sliders contextuels */}
                                     {selectedElementId && (
                                         <div className="pt-4 border-t border-gray-100 space-y-4">
-
-                                            {/* Taille de la sélection */}
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                                     Taille de la sélection
@@ -666,7 +645,6 @@ export default function CompleteProfilePage() {
                                                 />
                                             </div>
 
-                                            {/* Taille des pixels (si flou) */}
                                             {elements.find(el => el.id === selectedElementId)?.type === 'pixelate' && (
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -698,7 +676,6 @@ export default function CompleteProfilePage() {
                                         </div>
                                     )}
 
-                                    {/* Choix des emojis */}
                                     {activeTool === 'emoji' && (
                                         <div className="mt-4 pt-4 border-t border-gray-100">
                                             <div className="grid grid-cols-4 gap-1.5">
@@ -733,9 +710,6 @@ export default function CompleteProfilePage() {
                         </div>
                     </div>
                 )}
-
-
-
 
                 <p className="mt-6 text-sm text-center text-gray-600">
                     Après validation, contactez le support via WhatsApp pour vérification.

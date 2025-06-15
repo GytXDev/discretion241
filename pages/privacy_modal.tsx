@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 
-export default function PrivacyModal() {
+export default function PrivacyModal({ onAccept }: { onAccept?: () => void}) {
     const [showModal, setShowModal] = useState(false);
 
     useEffect(() => {
@@ -12,6 +12,7 @@ export default function PrivacyModal() {
     const handleAccept = () => {
         localStorage.setItem("discretion_privacy_accepted", "true");
         setShowModal(false);
+        if(onAccept) onAccept();
     };
 
     if (!showModal) return null;
@@ -74,7 +75,6 @@ export default function PrivacyModal() {
                                 content={
                                     <>
                                         - 1 000 CFA : Voir un numéro (24h)<br />
-                                        - 999 CFA : Voir les tarifs des profils (24h)<br />
                                         Paiements via Airtel Money<br />
                                         Aucune donnée bancaire n'est stockée.
                                     </>

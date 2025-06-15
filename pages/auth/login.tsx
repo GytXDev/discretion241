@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { auth, db } from '../firebase/config';
+import { auth, db } from '../../firebase/config';
 import {
   GoogleAuthProvider,
   signInWithPopup,
@@ -27,7 +27,7 @@ export default function LoginPage() {
     if (docSnap.exists()) {
       router.push('/');
     } else {
-      router.push('/complete_profile');
+      router.push('../profile/complete_profile');
     }
   };
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-sm text-gray-600">
           Pas encore inscrit ?{' '}
           <button
-            onClick={() => router.push('/register')}
+            onClick={() => router.push('/auth/register')}
             className="text-pink-600 hover:underline"
           >
             Créer un compte

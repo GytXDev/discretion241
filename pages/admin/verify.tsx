@@ -41,7 +41,7 @@ export default function AdminVerificationPage() {
                     router.push('/');
                 }
             } else {
-                router.push('/login');
+                router.push('../auth/login');
             }
         };
         checkAdmin();
@@ -138,7 +138,7 @@ export default function AdminVerificationPage() {
                         onClick={() => router.push('/')}
                         className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                     >
-                        Retour au tableau de bord
+                        Retour à l'accueil
                     </button>
                 </div>
             </div>

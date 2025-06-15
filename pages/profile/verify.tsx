@@ -16,7 +16,7 @@ export default function VerifyPage() {
     const [frameIndexes, setFrameIndexes] = useState([0, 1, 2]);
 
     useEffect(() => {
-        if (!loading && !user) router.push("/login");
+        if (!loading && !user) router.push("../auth/login");
 
         const shuffledEmojis = [...EMOJIS].sort(() => 0.5 - Math.random());
         setSelectedEmojis(shuffledEmojis.slice(0, 3));
@@ -35,11 +35,10 @@ export default function VerifyPage() {
     }, []);
 
 
-    const whatsappNumber = "YOUR_WHATSAPP_NUMBER";
     const message = encodeURIComponent(
-        `Bonjour, je souhaite vérifier mon compte sur Discrétion+241. Voici mon email : ${user?.email}. Je vais maintenant envoyer une photo de moi et un vocal (vue unique).`
+        `Bonjour, je souhaite vérifier mon compte sur Discrétion241. Voici mon email : ${user?.email}. Je vais maintenant envoyer une photo de moi et un vocal (vue unique).`
     );
-    const whatsappLink = `https://wa.me/${whatsappNumber}?text=${message}`;
+    const whatsappLink = `https://wa.me/241074001209?text=${message}`;
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-4 py-10">

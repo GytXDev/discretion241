@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { db, auth } from "../firebase/config";
-import { collection, query, where, getDocs, getDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc, updateDoc, addDoc } from "firebase/firestore";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useRouter } from "next/router";
 import Image from "next/image";
@@ -8,6 +8,7 @@ import { FaBars } from "react-icons/fa";
 import { FiChevronDown, FiChevronUp, FiFilter, FiLogIn, FiLogOut, FiUser, FiUserPlus, FiX, FiXCircle } from "react-icons/fi";
 import PrivacyModal from "./privacy_modal";
 import PaymentButton from "./payment/payment_button";
+import TermsModal from "./terms_modal";
 
 interface Profile {
   uid: string;
@@ -47,6 +48,8 @@ export default function Home() {
     { label: "26 – 31 ans", min: 26, max: 31 },
     { label: "31 ans et plus", min: 31, max: 99 },
   ];
+  const [hasAcceptedPrivacy, setHasAcceptedPrivacy] = useState(false);
+
 
   /* ==================== RANDOM FRAMES ==================== */
   useEffect(() => {
@@ -69,12 +72,12 @@ export default function Home() {
           }
 
           if (userData.step === "profile") {
-            router.push("/complete_profile");
+            router.push("/profile/complete_profile");
             return;
           }
 
           if (userData.step === "verification") {
-            router.push("/verify");
+            router.push("/profile/verify");
             return;
           }
         }
@@ -100,7 +103,7 @@ export default function Home() {
 
 
   const FilterBar = () => {
-    const [isOpen, setIsOpen] = useState(true);
+    const [isOpen, setIsOpen] = useState(false);
 
     return (
       <div className="sticky top-[70px] z-40 bg-white/80 backdrop-blur-lg rounded-b-2xl shadow-md px-5 py-2 mb-6 border-b border-gray-200">
@@ -132,8 +135,8 @@ export default function Home() {
                         setSelectedAgeRange(isActive ? null : range.label)
                       }
                       className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${isActive
-                          ? "bg-purple-600 text-white border-purple-600"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                         }`}
                     >
                       {range.label}
@@ -263,10 +266,40 @@ export default function Home() {
         </div>
 
         {/* Message */}
-        <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">Aucun profil disponible</h3>
-        <p className="text-gray-600 max-w-md px-4 text-sm sm:text-base">
-          Reviens bientôt pour découvrir de nouveaux profils près de toi.
-        </p>
+        {/* Texte adapté selon l'authentification */}
+        {user ? (
+          <>
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
+              Aucun profil disponible
+            </h3>
+            <p className="text-gray-600 max-w-md px-4 text-sm sm:text-base">
+              Reviens bientôt pour découvrir de nouveaux profils près de toi.
+            </p>
+          </>
+        ) : (
+          <>
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
+              Connecte-toi pour accéder aux profils
+            </h3>
+            <p className="text-gray-600 max-w-md px-4 text-sm sm:text-base mb-4">
+              Sur Discretion241, seuls les membres connectés peuvent consulter les profils ou proposer leurs services dans un cadre discret et responsable.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => router.push("/auth/login")}
+                className="px-5 py-2 rounded-full bg-purple-600 text-white hover:bg-purple-700 transition"
+              >
+                Se connecter
+              </button>
+              <button
+                onClick={() => router.push("/auth/register")}
+                className="px-5 py-2 rounded-full border border-purple-600 text-purple-600 hover:bg-purple-50 transition"
+              >
+                S'inscrire
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   };
@@ -359,6 +392,19 @@ export default function Home() {
                 {profile.genre} • {profile.ville}
                 {profile.quartier && `, ${profile.quartier}`}
               </p>
+              <div className="flex gap-2 mt-1 flex-wrap">
+                {profile.recoit && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full bg-emerald-100 text-emerald-700">
+                    📍 Reçoit
+                  </span>
+                )}
+                {profile.deplace && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-700">
+                    🚶🏽‍♀️ Se déplace
+                  </span>
+                )}
+              </div>
+
             </div>
             <span className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-100 to-lime-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full shadow-sm ring-1 ring-emerald-200/60">
               <Image
@@ -378,32 +424,36 @@ export default function Home() {
             {profile.description}
           </p>
 
-          {profile.tarifs && (
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
-              {profile.tarifs.un_coup && (
+          {profile.tarifs &&
+            (profile.tarifs.un_coup! > 0 || profile.tarifs.deux_coups! > 0 || profile.tarifs.nuit! > 0) ? (
+            <div className="grid grid-cols-3 gap-2 text-center text-sm">
+              {profile.tarifs.un_coup && profile.tarifs.un_coup > 0 && (
                 <div className="bg-gray-50 p-2 rounded">
                   <p className="text-gray-500">1 coup</p>
                   <p className="font-semibold">{profile.tarifs.un_coup} CFA</p>
                 </div>
               )}
-              {profile.tarifs.deux_coups && (
+              {profile.tarifs.deux_coups && profile.tarifs.deux_coups > 0 && (
                 <div className="bg-gray-50 p-2 rounded">
                   <p className="text-gray-500">2 coups</p>
                   <p className="font-semibold">{profile.tarifs.deux_coups} CFA</p>
                 </div>
               )}
-              {profile.tarifs.nuit && (
+              {profile.tarifs.nuit && profile.tarifs.nuit > 0 && (
                 <div className="bg-gray-50 p-2 rounded">
                   <p className="text-gray-500">Nuit</p>
                   <p className="font-semibold">{profile.tarifs.nuit} CFA</p>
                 </div>
               )}
             </div>
+          ) : (
+            <p className="text-sm text-black-600 italic text-center mt-2">
+              💌 Les détails se découvrent en privé... écris-lui pour en savoir plus.
+            </p>
           )}
 
-
           {user ? (
-            canSeeContact ? (
+            user.uid === profile.uid || canSeeContact ? (
               <div className="mt-4 py-2 w-full text-center rounded-full bg-green-100 text-green-800 font-semibold">
                 <div className="flex items-center justify-center gap-2 text-green-300 font-semibold">
                   <img src="/icons/whatsapp.png" alt="WhatsApp" className="w-5 h-5" />
@@ -411,34 +461,50 @@ export default function Home() {
                     href={`https://wa.me/241${profile.contact}?text=Bonjour ${profile.pseudo}, je suis intéressé(e) par ton profil vu sur Discretion241.`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="underline hover:text-green-400"
+                    className="text-gray-800 hover:text-purple-600 font-medium transition"
                   >
                     {profile.contact}
                   </a>
+
+
                 </div>
               </div>
             ) : (
               <PaymentButton
                 profileName={profile.pseudo}
                 profileUid={profile.uid}
-                onSuccess={async () => {
-                  const now = Date.now();
-                  const duration = 24 * 60 * 60 * 1000;
-                  await updateDoc(doc(db, "users", user.uid), {
-                    [`contacts.${profile.uid}`]: now + duration
-                  });
-                  setCanSeeContact(true); // mettre à jour l'état
-                }}
+                  onSuccess={async () => {
+                    const now = Date.now();
+                    const duration = 24 * 60 * 60 * 1000;
+
+                    // 1. Ajouter le contact temporaire
+                    await updateDoc(doc(db, "users", user.uid), {
+                      [`contacts.${profile.uid}`]: now + duration
+                    });
+
+                    // 2. Enregistrer le paiement dans la collection "payments"
+                    await addDoc(collection(db, "payments"), {
+                      paidBy: user.uid,
+                      forProfile: profile.uid,
+                      timestamp: new Date(),
+                      type: "contact_view"
+                    });
+
+                    // 3. Mettre à jour l'état local pour affichage
+                    setCanSeeContact(true);
+                  }}
+
               />
             )
           ) : (
             <button
-              onClick={() => router.push("/login")}
+              onClick={() => router.push("/auth/login")}
               className="mt-4 w-full py-2 rounded-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium hover:opacity-90 transition"
             >
               Voir le contact
             </button>
           )}
+
 
 
 
@@ -490,7 +556,7 @@ export default function Home() {
                     </button>
                   )}
                   <button
-                    onClick={() => router.push("/profile")}
+                    onClick={() => router.push("/profile/profile")}
                     className="px-4 py-1.5 text-sm rounded-full bg-purple-100 text-purple-800 hover:bg-purple-200 transition"
                   >
                     Mon compte
@@ -505,13 +571,13 @@ export default function Home() {
               ) : (
                 <>
                   <button
-                    onClick={() => router.push("/login")}
+                    onClick={() => router.push("/auth/login")}
                     className="px-4 py-1.5 text-sm rounded-full border hover:bg-gray-50 transition"
                   >
                     Connexion
                   </button>
                   <button
-                    onClick={() => router.push("/login")}
+                    onClick={() => router.push("/auth/register")}
                     className="px-4 py-1.5 text-sm rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 transition"
                   >
                     S'inscrire
@@ -568,7 +634,7 @@ export default function Home() {
                     )}
                     <button
                       onClick={() => {
-                        router.push("/profile");
+                        router.push("/profile/profile");
                         setIsMobileMenuOpen(false);
                       }}
                       className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
@@ -591,7 +657,7 @@ export default function Home() {
                   <>
                     <button
                       onClick={() => {
-                        router.push("/login");
+                        router.push("/auth/login");
                         setIsMobileMenuOpen(false);
                       }}
                       className="flex items-center gap-3 w-full px-6 py-4 rounded-lg text-gray-800 hover:bg-gray-100 transition text-lg font-medium"
@@ -601,7 +667,7 @@ export default function Home() {
                     </button>
                     <button
                       onClick={() => {
-                        router.push("/login");
+                        router.push("/auth/login");
                         setIsMobileMenuOpen(false);
                       }}
                       className="w-full py-4 px-6 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition flex items-center justify-center gap-3 text-lg"
@@ -620,18 +686,17 @@ export default function Home() {
   };
 
   /* ==================== MAIN CONTENT ==================== */
-  const filteredProfiles = profiles.filter((profile) => {
-    // Filtre par ville
-    if (selectedVille && profile.ville !== selectedVille) return false;
+  const filteredProfiles = user
+    ? profiles.filter((profile) => {
+      if (selectedVille && profile.ville !== selectedVille) return false;
+      if (selectedAgeRange) {
+        const range = AGE_RANGES.find(r => r.label === selectedAgeRange);
+        if (range && (profile.age < range.min || profile.age > range.max)) return false;
+      }
+      return true;
+    })
+    : [];
 
-    // Filtre par tranche d'âge
-    if (selectedAgeRange) {
-      const range = AGE_RANGES.find(r => r.label === selectedAgeRange);
-      if (range && (profile.age < range.min || profile.age > range.max)) return false;
-    }
-
-    return true;
-  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -648,7 +713,13 @@ export default function Home() {
           </div>
         )}
       </main>
-      <PrivacyModal />
+      <>
+        {!hasAcceptedPrivacy && (
+          <PrivacyModal onAccept={() => setHasAcceptedPrivacy(true)} />
+        )}
+        {hasAcceptedPrivacy && <TermsModal />}
+      </>
+
     </div>
 
   );
