@@ -3,7 +3,6 @@ import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import { Poppins } from "next/font/google";
 import Head from "next/head";
-import ToastManager from "./ui/ToastManager";
 
 // Import de la police
 const poppins = Poppins({

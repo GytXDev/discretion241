@@ -20,7 +20,6 @@ export default function CompleteProfilePage() {
         activeTool,
         setActiveTool,
         pixelSize,
-        setPixelSize,
         selectedElementId,
         emojis,
         addElement,

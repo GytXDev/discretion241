@@ -57,7 +57,6 @@ export default function ProfilePage() {
         activeTool,
         setActiveTool,
         pixelSize,
-        setPixelSize,
         selectedElementId,
         emojis,
         addElement,
