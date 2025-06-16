@@ -75,7 +75,7 @@ export default function TermsModal() {
                             <h3 className="font-semibold text-gray-800 mb-2">📞 Assistance</h3>
                             <p className="text-gray-700">
                                 Pour signaler un abus ou poser une question :<br />
-                                👉 WhatsApp [numéro à insérer]
+                                👉 support@discretion241.com
                             </p>
                         </div>
 

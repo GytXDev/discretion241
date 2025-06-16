@@ -19,16 +19,10 @@ export default function RegisterPage() {
 
     const redirectToProfile = async () => {
         try {
-            console.log("Redirection vers /complete_profile");
-            await router.push("../profile/complete_profile");
-            // Fallback au cas où Next Router ne redirige pas
-            setTimeout(() => {
-                if (window.location.pathname !== "../profile/complete_profile") {
-                    window.location.href = "../profile/complete_profile";
-                }
-            }, 1000);
+            await router.push("/profile/complete_profile");
         } catch (err) {
             console.error("Erreur de redirection :", err);
+            window.location.href = "/profile/complete_profile";
         }
     };
 
@@ -79,6 +73,9 @@ export default function RegisterPage() {
         setLoading(true);
 
         try {
+            if (auth.currentUser) {
+                await auth.signOut();
+            }
             const cred = await createUserWithEmailAndPassword(auth, email, password);
             const uid = cred.user.uid;
 
@@ -94,19 +91,23 @@ export default function RegisterPage() {
         } catch (err: any) {
             console.error("Erreur Email Auth:", err);
 
-            // Gestion spécifique des erreurs Firebase
-            switch (err.code) {
-                case 'auth/email-already-in-use':
-                    setErrorMessage("Un compte existe déjà avec cet email. Essayez de vous connecter.");
-                    break;
-                case 'auth/invalid-email':
-                    setErrorMessage("L'email fourni n'est pas valide.");
-                    break;
-                case 'auth/weak-password':
-                    setErrorMessage("Le mot de passe doit contenir au moins 6 caractères.");
-                    break;
-                default:
-                    setErrorMessage("Une erreur s'est produite lors de l'inscription.");
+            // Assurez-vous que err.code existe
+            if (err.code) {
+                switch (err.code) {
+                    case 'auth/email-already-in-use':
+                        setErrorMessage("Un compte existe déjà avec cet email. Essayez de vous connecter.");
+                        break;
+                    case 'auth/invalid-email':
+                        setErrorMessage("L'email fourni n'est pas valide.");
+                        break;
+                    case 'auth/weak-password':
+                        setErrorMessage("Le mot de passe doit contenir au moins 6 caractères.");
+                        break;
+                    default:
+                        setErrorMessage("Une erreur s'est produite lors de l'inscription.");
+                }
+            } else {
+                setErrorMessage("Une erreur inconnue s'est produite.");
             }
         } finally {
             setLoading(false);

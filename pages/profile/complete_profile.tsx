@@ -711,7 +711,7 @@ export default function CompleteProfilePage() {
                 )}
 
                 <p className="mt-6 text-sm text-center text-gray-600">
-                    Après validation, contactez le support via WhatsApp pour vérification.
+                    Après validation, contactez le support via WhatsApp pour vérification pour profil je propose.
                 </p>
             </div>
         </div>

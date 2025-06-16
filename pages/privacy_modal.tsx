@@ -74,12 +74,15 @@ export default function PrivacyModal({ onAccept }: { onAccept?: () => void}) {
                                 title="4. Paiements et accès"
                                 content={
                                     <>
-                                        - 1 000 CFA : Voir un numéro (24h)<br />
-                                        Paiements via Airtel Money<br />
-                                        Aucune donnée bancaire n'est stockée.
+                                        - <strong>2 000 CFA</strong> : Frais d'intégration pour apparaître sur la plateforme<br />
+                                        - <strong>1 000 CFA</strong> : Accès au numéro d’un profil pendant 24h<br />
+                                        <br />
+                                        Paiements sécurisés via <strong>Airtel Money (074 / 077 uniquement)</strong><br />
+                                        Aucune donnée bancaire n’est stockée sur nos serveurs.
                                     </>
                                 }
                             />
+
 
                             <Section
                                 title="5. Suppression de vos données"
@@ -103,7 +106,7 @@ export default function PrivacyModal({ onAccept }: { onAccept?: () => void}) {
                                 <h3 className="font-semibold text-gray-800 mb-2">📞 Contact</h3>
                                 <p className="text-gray-700">
                                     Pour toute question, vérification ou suppression de compte :<br />
-                                    👉 WhatsApp [numéro à insérer]
+                                    👉 support@discretion241.com
                                 </p>
                             </div>
                         </div>
