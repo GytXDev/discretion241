@@ -455,34 +455,28 @@ export default function Home() {
           {user ? (
             user.uid === profile.uid || canSeeContact ? (
               <div className="mt-4 py-2 w-full text-center rounded-full bg-green-100 text-green-800 font-semibold">
-                <div className="flex items-center justify-center gap-2 text-green-300 font-semibold">
+                <div className="flex items-center justify-center gap-2">
                   <img src="/icons/whatsapp.png" alt="WhatsApp" className="w-5 h-5" />
-                  <a
-                    href={`https://wa.me/241${profile.contact}?text=Bonjour ${profile.pseudo}, je suis intéressé(e) par ton profil vu sur Discretion241.`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-800 hover:text-purple-600 font-medium transition"
-                  >
-                    {profile.contact}
-                  </a>
-
-
+                  <span className="text-red-500 font-medium">
+                    Problème technique - Contact temporairement indisponible
+                  </span>
                 </div>
               </div>
             ) : (
               <PaymentButton
                 profileName={profile.pseudo}
                 profileUid={profile.uid}
-                  onSuccess={async () => {
-                    const now = Date.now();
-                    const duration = 24 * 60 * 60 * 1000;
+                onSuccess={async () => {
+                  const now = Date.now();
+                  const duration = 24 * 60 * 60 * 1000;
 
+                  try {
                     // 1. Ajouter le contact temporaire
                     await updateDoc(doc(db, "users", user.uid), {
                       [`contacts.${profile.uid}`]: now + duration
                     });
 
-                    // 2. Enregistrer le paiement dans la collection "payments"
+                    // 2. Enregistrer le paiement
                     await addDoc(collection(db, "payments"), {
                       paidBy: user.uid,
                       forProfile: profile.uid,
@@ -490,10 +484,12 @@ export default function Home() {
                       type: "contact_view"
                     });
 
-                    // 3. Mettre à jour l'état local pour affichage
+                    // 3. Mettre à jour l'état (même si on affiche le message d'erreur)
                     setCanSeeContact(true);
-                  }}
-
+                  } catch (error) {
+                    console.error("Erreur de paiement:", error);
+                  }
+                }}
               />
             )
           ) : (
@@ -504,10 +500,6 @@ export default function Home() {
               Voir le contact
             </button>
           )}
-
-
-
-
         </div>
       </div>
     );
